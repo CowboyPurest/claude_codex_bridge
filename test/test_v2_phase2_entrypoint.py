@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -900,6 +901,86 @@ def _wait_for_path(path: Path, timeout: float = 5.0) -> None:
     raise AssertionError(f'timed out waiting for {path}{suffix}')
 
 
+def _wait_for_ccbd_ping_payload(project_root: Path, *, timeout: float = 5.0) -> dict[str, object]:
+    socket_path = PathLayout(project_root).ccbd_socket_path
+    _wait_for_path(socket_path, timeout=timeout)
+    deadline = time.time() + timeout
+    last_error: str | None = None
+    while time.time() < deadline:
+        try:
+            return CcbdClient(socket_path, timeout_s=0.2).ping('ccbd')
+        except CcbdClientError as exc:
+            last_error = str(exc)
+        time.sleep(0.05)
+    suffix = f' last_error={last_error!r}' if last_error else ''
+    raise AssertionError(f'timed out waiting for ccbd ping payload{suffix}')
+
+
+def _tmux_cmd_pane_id(socket_path: str, session_name: str, *, timeout: float = 3.0) -> str:
+    deadline = time.time() + timeout
+    last_stdout = ''
+    while time.time() < deadline:
+        proc = subprocess.run(
+            [
+                'tmux',
+                '-S',
+                socket_path,
+                'list-panes',
+                '-t',
+                session_name,
+                '-F',
+                '#{pane_id}\t#{@ccb_role}\t#{pane_current_command}',
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        last_stdout = proc.stdout
+        if proc.returncode == 0:
+            for line in (proc.stdout or '').splitlines():
+                pane_id, _sep, rest = line.partition('\t')
+                _role, _sep2, _command = rest.partition('\t')
+                if _role.strip() == 'cmd' and pane_id.strip().startswith('%'):
+                    return pane_id.strip()
+        time.sleep(0.05)
+    raise AssertionError(f'failed to resolve cmd pane; last_stdout={last_stdout!r}')
+
+
+def _tmux_wait_for_pane_text(socket_path: str, pane_id: str, marker: str, *, timeout: float = 3.0) -> str:
+    deadline = time.time() + timeout
+    last_text = ''
+    while time.time() < deadline:
+        proc = subprocess.run(
+            ['tmux', '-S', socket_path, 'capture-pane', '-p', '-t', pane_id],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if proc.returncode == 0:
+            last_text = proc.stdout
+            if marker in last_text:
+                return last_text
+        time.sleep(0.05)
+    raise AssertionError(f'failed to observe marker {marker!r} in pane {pane_id}; last_text={last_text!r}')
+
+
+def _wait_for_file_text(path: Path, marker: str, *, timeout: float = 3.0) -> str:
+    deadline = time.time() + timeout
+    last_text = ''
+    while time.time() < deadline:
+        try:
+            last_text = path.read_text(encoding='utf-8')
+        except Exception:
+            time.sleep(0.05)
+            continue
+        if marker in last_text:
+            return last_text
+        time.sleep(0.05)
+    raise AssertionError(f'failed to observe marker {marker!r} in file {path}; last_text={last_text!r}')
+
+
 def _assert_phase2_app_shutdown_clean(project_root: Path, app: CcbdApp, thread: threading.Thread) -> None:
     app.request_shutdown()
     thread.join(timeout=2)
@@ -1009,6 +1090,63 @@ def test_ccb_v2_project_lifecycle(tmp_path: Path) -> None:
 
     kill = _run_ccb(['kill'], cwd=project_root)
     assert kill.returncode == 0, kill.stderr
+
+
+def test_ccb_cmd_pane_blackbox_inherits_user_session_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    if shutil.which('tmux') is None:
+        pytest.skip('tmux is required for cmd pane blackbox env regression')
+
+    project_root = tmp_path / 'repo-cmd-env-blackbox'
+    _write(project_root / '.ccb' / 'ccb.config', 'cmd; demo:codex\n')
+
+    shell_path = shutil.which('sh') or '/bin/sh'
+    sentinel_display = 'ccb-test-display'
+    sentinel_xauthority = '/tmp/ccb-test-xauthority'
+    sentinel_dbus = 'unix:path=/tmp/ccb-test-bus'
+    sentinel_wayland = 'ccb-test-wayland'
+    monkeypatch.setenv('CCB_CMD_SHELL', shell_path)
+    monkeypatch.setenv('SHELL', shell_path)
+    monkeypatch.setenv('DISPLAY', sentinel_display)
+    monkeypatch.setenv('XAUTHORITY', sentinel_xauthority)
+    monkeypatch.setenv('DBUS_SESSION_BUS_ADDRESS', sentinel_dbus)
+    monkeypatch.setenv('WAYLAND_DISPLAY', sentinel_wayland)
+
+    start = _run_ccb([], cwd=project_root)
+    assert start.returncode == 0, start.stderr
+    assert 'start_status: ok' in start.stdout
+
+    try:
+        payload = _wait_for_ccbd_ping_payload(project_root)
+        tmux_socket_path = str(payload.get('namespace_tmux_socket_path') or '').strip()
+        tmux_session_name = str(payload.get('namespace_tmux_session_name') or '').strip()
+        assert tmux_socket_path
+        assert tmux_session_name
+
+        cmd_pane_id = _tmux_cmd_pane_id(tmux_socket_path, tmux_session_name)
+        marker = 'CCB_CMD_ENV_MARKER'
+        env_dump_path = project_root / '.ccb' / 'cmd-env.txt'
+        command = (
+            f'printf "{marker} SHELL=%s DISPLAY=%s XAUTHORITY=%s DBUS=%s WAYLAND=%s\\n" '
+            f'"$SHELL" "$DISPLAY" "$XAUTHORITY" "$DBUS_SESSION_BUS_ADDRESS" "$WAYLAND_DISPLAY" > {env_dump_path}'
+        )
+        send = subprocess.run(
+            ['tmux', '-S', tmux_socket_path, 'send-keys', '-t', cmd_pane_id, command, 'C-m'],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        assert send.returncode == 0, send.stderr
+
+        env_text = _wait_for_file_text(env_dump_path, marker)
+        assert f'{marker} SHELL={shell_path}' in env_text
+        assert f'DISPLAY={sentinel_display}' in env_text
+        assert f'XAUTHORITY={sentinel_xauthority}' in env_text
+        assert f'DBUS={sentinel_dbus}' in env_text
+        assert f'WAYLAND={sentinel_wayland}' in env_text
+    finally:
+        kill = _run_ccb(['kill', '-f'], cwd=project_root)
+        assert kill.returncode == 0, kill.stderr
     assert 'kill_status: ok' in kill.stdout
     assert 'state: unmounted' in kill.stdout
 

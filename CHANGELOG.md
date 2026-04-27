@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v6.0.16 (2026-04-27)
+
+### Codex Plugin Projection & Cmd Shell Compatibility
+
+- **Codex Plugin Projection Fixed**: managed Codex homes now project plugin-bundle authority under `.tmp/plugins/` and `.tmp/plugins.sha`, so isolated agents inherit marketplace and installed plugin assets coherently instead of starting with plugin-enabled config but missing bundles
+- **Plugin Refresh Semantics Tightened**: startup now refreshes the managed plugin projection as one authority unit, removes stale managed plugin residue when the source projection disappears, and skips unnecessary recopies when the source `plugins.sha` marker is unchanged
+- **Cmd Shell / Session Env Hardening**: the `cmd` pane now directly `exec`s the resolved user shell and preserves ordinary user-session transport variables such as `DISPLAY`, `WAYLAND_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XAUTHORITY`, and `SSH_AUTH_SOCK`, improving fish/zsh and GUI-command compatibility
+
 ## v6.0.15 (2026-04-27)
 
 ### Codex Route Authority & Foreground Attach Polish

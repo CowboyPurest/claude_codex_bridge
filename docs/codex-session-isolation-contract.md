@@ -99,6 +99,11 @@ the user's source Codex credentials and config into the private managed home so
 the provider can authenticate, but projected credential files remain secret
 material and must not be exported by diagnostics.
 
+Codex plugin-bundle projection is also not conversation identity, but it is
+startup authority. Managed homes that preserve plugin-related source-home config
+or command/skill behavior must also preserve the source plugin-bundle authority
+required to satisfy that behavior.
+
 ## 4. Startup Contract
 
 When `ccb` starts a managed Codex agent:
@@ -108,7 +113,10 @@ When `ccb` starts a managed Codex agent:
 - it must ensure `CODEX_SESSION_ROOT == CODEX_HOME/sessions`
 - it must create the managed home and session root before launching Codex
 - it must materialize required Codex config and credential projections into the managed home without treating them as session identity
-- it must refresh only inheritable Codex config, auth, skills, and commands projections into the managed home on each managed launch so source-home updates become visible after restart
+- it must refresh only inheritable Codex config, auth, skills, commands, and plugin-bundle projections into the managed home on each managed launch so source-home updates become visible after restart
+- for plugin-bundle projection, startup must treat `.tmp/plugins/` plus
+  `.tmp/plugins.sha` when present as one managed-home authority unit rather
+  than cherry-picking only marketplace or manifest fragments
 - when API inheritance is enabled, it must pass the current inheritable Codex API environment into the managed Codex process at launch time rather than relying on stale one-time projection state
 - when explicit agent API authority is configured, the managed home must not
   project global Codex config that can redefine provider routing; instead the
@@ -247,6 +255,7 @@ Diagnostics export should include:
 - managed home summary metadata
 - managed session-root logs and related project-local session files
 - non-secret isolated `config.toml` overlays when present
+- non-secret plugin projection summary metadata when available
 - explicit contract-violation evidence when Codex writes outside the managed home
 
 Diagnostics export must exclude copied credential files such as `auth.json`.

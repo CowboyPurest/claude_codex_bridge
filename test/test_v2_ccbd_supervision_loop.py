@@ -650,6 +650,8 @@ def test_runtime_supervision_loop_reflows_when_cmd_slot_is_missing(tmp_path: Pat
     registry.upsert(_runtime('codex', project_id=ctx.project_id, layout=layout, pid=101, health='healthy'))
     remount_calls: list[str] = []
     fake_backend = _FakeCmdReplacementBackend()
+    monkeypatch.setenv('SHELL', 'zsh')
+    monkeypatch.setattr('ccbd.start_runtime.layout.shutil.which', lambda name: '/mock/bin/zsh' if name == 'zsh' else None)
 
     class _NamespaceController:
         def __init__(self, *_args, **_kwargs) -> None:
@@ -730,7 +732,7 @@ def test_runtime_supervision_loop_reflows_when_cmd_slot_is_missing(tmp_path: Pat
     ]]
     assert fake_backend.respawn_calls == [{
         'pane_id': '%cmd',
-        'cmd': 'if [ -n "${SHELL:-}" ]; then exec "$SHELL" -l; fi; if command -v bash >/dev/null 2>&1; then exec bash -l; fi; exec sh',
+        'cmd': 'exec /mock/bin/zsh -l',
         'cwd': str(layout.project_root),
         'stderr_log_path': None,
         'remain_on_exit': False,

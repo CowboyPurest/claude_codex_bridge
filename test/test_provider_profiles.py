@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 
 from agents.models import AgentSpec, PermissionMode, ProviderProfileSpec, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
 from provider_backends.claude.launcher_runtime.home import materialize_claude_home_config
 from provider_backends.gemini.launcher_runtime.home import materialize_gemini_home_config
+import provider_profiles.codex_home_config as codex_home_config
 from provider_profiles.codex_home_config import codex_provider_authority_fingerprint
 from provider_profiles import materialize_provider_profile
 from storage.paths import PathLayout
@@ -26,6 +28,50 @@ def _spec(name: str, provider: str = "codex", *, provider_profile: ProviderProfi
     )
 
 
+def _write_codex_plugin_source(
+    home: Path,
+    *,
+    plugin_name: str = 'demo-plugin',
+    sha: str | None = 'plugins-sha-v1',
+    marketplace_name: str = 'openai-curated',
+    skill_body: str = 'plugin skill v1\n',
+) -> None:
+    plugin_root = home / '.tmp' / 'plugins'
+    (plugin_root / '.agents' / 'plugins').mkdir(parents=True, exist_ok=True)
+    (plugin_root / '.agents' / 'skills' / 'plugin-creator').mkdir(parents=True, exist_ok=True)
+    (plugin_root / 'plugins' / plugin_name / '.codex-plugin').mkdir(parents=True, exist_ok=True)
+    (plugin_root / 'plugins' / plugin_name / 'skills' / plugin_name).mkdir(parents=True, exist_ok=True)
+    (home / '.tmp').mkdir(parents=True, exist_ok=True)
+    if sha is None:
+        (home / '.tmp' / 'plugins.sha').unlink(missing_ok=True)
+    else:
+        (home / '.tmp' / 'plugins.sha').write_text(f'{sha}\n', encoding='utf-8')
+    (plugin_root / '.agents' / 'plugins' / 'marketplace.json').write_text(
+        json.dumps(
+            {
+                'name': marketplace_name,
+                'plugins': [
+                    {
+                        'name': plugin_name,
+                        'source': {'source': 'local', 'path': f'./plugins/{plugin_name}'},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    (plugin_root / 'plugins' / plugin_name / '.codex-plugin' / 'plugin.json').write_text(
+        json.dumps({'name': plugin_name}, ensure_ascii=False, indent=2),
+        encoding='utf-8',
+    )
+    (plugin_root / 'plugins' / plugin_name / 'skills' / plugin_name / 'SKILL.md').write_text(
+        skill_body,
+        encoding='utf-8',
+    )
+
+
 def test_materialize_codex_profile_copies_inherited_assets(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo'
     source_home = tmp_path / 'system-codex-home'
@@ -35,6 +81,7 @@ def test_materialize_codex_profile_copies_inherited_assets(tmp_path: Path, monke
     (source_home / 'auth.json').write_text('{"OPENAI_API_KEY":"system-key"}', encoding='utf-8')
     (source_home / 'skills' / 'demo.md').write_text('demo skill\n', encoding='utf-8')
     (source_home / 'commands' / 'demo.md').write_text('demo command\n', encoding='utf-8')
+    _write_codex_plugin_source(source_home)
     monkeypatch.setenv('CODEX_HOME', str(source_home))
 
     profile = materialize_provider_profile(
@@ -59,6 +106,9 @@ def test_materialize_codex_profile_copies_inherited_assets(tmp_path: Path, monke
     assert (runtime_home / 'auth.json').is_file()
     assert (runtime_home / 'skills' / 'demo.md').is_file()
     assert (runtime_home / 'commands' / 'demo.md').is_file()
+    assert (runtime_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v1\n'
+    assert (runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json').is_file()
+    assert (runtime_home / '.tmp' / 'plugins' / 'plugins' / 'demo-plugin' / '.codex-plugin' / 'plugin.json').is_file()
     assert (runtime_home / 'sessions').is_dir()
 
 
@@ -91,6 +141,12 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
         encoding='utf-8',
     )
     monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        marketplace_name='codex-official',
+        skill_body='plugin skill explicit\n',
+    )
 
     profile = materialize_provider_profile(
         layout=PathLayout(project_root),
@@ -126,6 +182,191 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     assert codex_provider_authority_fingerprint(profile)
     auth_payload = json.loads((runtime_home / 'auth.json').read_text(encoding='utf-8'))
     assert auth_payload == {'OPENAI_API_KEY': 'profile-key'}
+    assert (runtime_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v1\n'
+    assert (runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json').is_file()
+    assert (runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md').read_text(encoding='utf-8') == 'plugin skill explicit\n'
+
+
+def test_materialize_codex_profile_refreshes_plugin_projection_when_source_changes(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='plugins-sha-v1',
+        marketplace_name='market-v1',
+        skill_body='plugin skill v1\n',
+    )
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    runtime_home = Path(profile.runtime_home or '')
+    marketplace_path = runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json'
+    skill_path = runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md'
+    assert skill_path.read_text(encoding='utf-8') == 'plugin skill v1\n'
+
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='plugins-sha-v2',
+        marketplace_name='market-v2',
+        skill_body='plugin skill v2\n',
+    )
+
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    marketplace_payload = json.loads(marketplace_path.read_text(encoding='utf-8'))
+    assert marketplace_payload['name'] == 'market-v2'
+    assert skill_path.read_text(encoding='utf-8') == 'plugin skill v2\n'
+    assert (runtime_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v2\n'
+
+    plugin_source_root = source_home / '.tmp' / 'plugins'
+    plugin_sha_path = source_home / '.tmp' / 'plugins.sha'
+    shutil.rmtree(plugin_source_root)
+    plugin_sha_path.unlink(missing_ok=True)
+
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    assert not (runtime_home / '.tmp' / 'plugins').exists()
+    assert not (runtime_home / '.tmp' / 'plugins.sha').exists()
+
+
+def test_materialize_codex_profile_refreshes_plugin_projection_without_sha_marker(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha=None,
+        marketplace_name='market-no-sha-v1',
+        skill_body='plugin skill no sha v1\n',
+    )
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    runtime_home = Path(profile.runtime_home or '')
+    marketplace_path = runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json'
+    skill_path = runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md'
+    assert not (runtime_home / '.tmp' / 'plugins.sha').exists()
+    assert skill_path.read_text(encoding='utf-8') == 'plugin skill no sha v1\n'
+
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha=None,
+        marketplace_name='market-no-sha-v2',
+        skill_body='plugin skill no sha v2 updated\n',
+    )
+
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    marketplace_payload = json.loads(marketplace_path.read_text(encoding='utf-8'))
+    assert marketplace_payload['name'] == 'market-no-sha-v2'
+    assert skill_path.read_text(encoding='utf-8') == 'plugin skill no sha v2 updated\n'
+    assert not (runtime_home / '.tmp' / 'plugins.sha').exists()
+
+
+def test_materialize_codex_profile_skips_plugin_recopy_when_sha_is_unchanged(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='stable-plugin-sha',
+        marketplace_name='market-stable',
+        skill_body='plugin skill stable\n',
+    )
+
+    copied_sources: list[Path] = []
+    real_copytree = codex_home_config.shutil.copytree
+
+    def tracking_copytree(src, dst, *args, **kwargs):
+        src_path = Path(src)
+        if src_path == source_home / '.tmp' / 'plugins':
+            copied_sources.append(src_path)
+        return real_copytree(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(codex_home_config.shutil, 'copytree', tracking_copytree)
+
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    assert copied_sources == [source_home / '.tmp' / 'plugins']
+
+
+def test_materialize_codex_profile_repairs_incomplete_plugin_projection_even_when_sha_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='repairable-plugin-sha',
+        marketplace_name='market-repair',
+        skill_body='plugin skill repair\n',
+    )
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    runtime_home = Path(profile.runtime_home or '')
+    marketplace_path = runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json'
+    marketplace_path.unlink()
+    assert not marketplace_path.exists()
+
+    materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec('agent1', provider_profile=ProviderProfileSpec(mode='isolated')),
+        workspace_path=project_root,
+    )
+
+    marketplace_payload = json.loads(marketplace_path.read_text(encoding='utf-8'))
+    assert marketplace_payload['name'] == 'market-repair'
 
 
 def test_materialize_claude_profile_creates_runtime_home(tmp_path: Path) -> None:

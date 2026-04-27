@@ -102,6 +102,9 @@ Canonical layout:
           home/
             config.toml
             auth.json
+            .tmp/
+              plugins/
+              plugins.sha
             sessions/
               YYYY/MM/DD/rollout-*.jsonl
 ```
@@ -165,7 +168,11 @@ Required changes:
 - create `home/` and `home/sessions/` before launch
 - project non-secret config required by Codex into `home/config.toml`
 - project credentials such as `auth.json` only when required for provider authentication
+- project Codex plugin-bundle authority into `home/.tmp/plugins/` and
+  `home/.tmp/plugins.sha` when the source home provides it
 - never treat copied config or credentials as conversation authority
+- never treat plugin-bundle projection as session identity; it is startup
+  authority for the managed home only
 - report preparation failures as startup/degraded diagnostics rather than falling back to global `~/.codex`
 
 Exit criteria:

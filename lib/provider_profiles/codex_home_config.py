@@ -13,6 +13,13 @@ import shutil
 
 _CODEX_CUSTOM_PROVIDER_ID = 'custom'
 _BARE_TOML_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+_CODEX_PLUGIN_TREE_RELATIVE = Path('.tmp') / 'plugins'
+_CODEX_PLUGIN_SHA_RELATIVE = Path('.tmp') / 'plugins.sha'
+_CODEX_PLUGIN_REQUIRED_RELATIVE_PATHS = (
+    Path('.agents') / 'plugins' / 'marketplace.json',
+    Path('.agents') / 'skills',
+    Path('plugins'),
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,7 @@ def materialize_codex_home_config(
     )
     _sync_tree(source_home / 'skills', target_home / 'skills', enabled=_inherits_skills(profile))
     _sync_tree(source_home / 'commands', target_home / 'commands', enabled=_inherits_commands(profile))
+    _sync_codex_plugin_projection(source_home, target_home)
     return target_config
 
 
@@ -267,6 +275,79 @@ def _sync_tree(source: Path, target: Path, *, enabled: bool) -> None:
         shutil.copytree(source, target, dirs_exist_ok=True)
     except Exception:
         pass
+
+
+def _sync_codex_plugin_projection(source_home: Path, target_home: Path) -> None:
+    source_tree = source_home / _CODEX_PLUGIN_TREE_RELATIVE
+    source_sha = source_home / _CODEX_PLUGIN_SHA_RELATIVE
+    target_tree = target_home / _CODEX_PLUGIN_TREE_RELATIVE
+    target_sha = target_home / _CODEX_PLUGIN_SHA_RELATIVE
+    if not source_tree.is_dir():
+        _remove_path(target_tree)
+        _remove_path(target_sha)
+        return
+    if _plugin_projection_is_current(
+        source_tree=source_tree,
+        source_sha=source_sha,
+        target_tree=target_tree,
+        target_sha=target_sha,
+    ):
+        return
+    _remove_path(target_tree)
+    _remove_path(target_sha)
+    _sync_tree(source_tree, target_tree, enabled=True)
+    if source_sha.is_file():
+        _sync_file(source_sha, target_sha)
+    else:
+        target_sha.unlink(missing_ok=True)
+
+
+def _plugin_projection_is_current(*, source_tree: Path, source_sha: Path, target_tree: Path, target_sha: Path) -> bool:
+    if not target_tree.is_dir():
+        return False
+    if not _plugin_required_paths_available(source_tree, target_tree):
+        return False
+    if source_sha.is_file():
+        return target_sha.is_file() and _safe_read_text(source_sha) == _safe_read_text(target_sha)
+    source_fingerprint = _tree_metadata_fingerprint(source_tree)
+    if not source_fingerprint:
+        return False
+    return source_fingerprint == _tree_metadata_fingerprint(target_tree)
+
+
+def _plugin_required_paths_available(source_tree: Path, target_tree: Path) -> bool:
+    for relative in _CODEX_PLUGIN_REQUIRED_RELATIVE_PATHS:
+        if (source_tree / relative).exists() and not (target_tree / relative).exists():
+            return False
+    return True
+
+
+def _safe_read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding='utf-8')
+    except Exception:
+        return ''
+
+
+def _tree_metadata_fingerprint(root: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        for entry in sorted(root.rglob('*')):
+            relative = entry.relative_to(root)
+            kind = 'd' if entry.is_dir() else 'f' if entry.is_file() else 'l' if entry.is_symlink() else 'o'
+            digest.update(kind.encode('utf-8'))
+            digest.update(b'\0')
+            digest.update(str(relative).encode('utf-8', errors='ignore'))
+            digest.update(b'\0')
+            if entry.is_file():
+                stat = entry.stat()
+                digest.update(str(stat.st_size).encode('utf-8'))
+                digest.update(b'\0')
+                digest.update(str(stat.st_mtime_ns).encode('utf-8'))
+                digest.update(b'\0')
+    except Exception:
+        return ''
+    return digest.hexdigest()
 
 
 def _remove_path(path: Path) -> None:

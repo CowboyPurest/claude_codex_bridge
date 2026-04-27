@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shlex
+import shutil
+try:
+    import pwd
+except ImportError:  # pragma: no cover - Windows compatibility
+    pwd = None  # type: ignore[assignment]
 
 from cli.services.tmux_start_layout import TmuxStartLayout
+from terminal_runtime.env import default_shell as _default_shell_impl
+from terminal_runtime.env import is_windows as _is_windows_impl
+from terminal_runtime.env import is_wsl as _is_wsl_impl
 
 
 def prepare_start_layout(
@@ -101,8 +110,49 @@ def bootstrap_project_namespace_cmd_pane(
 
 
 def cmd_bootstrap_command() -> str:
-    return (
-        'if [ -n "${SHELL:-}" ]; then exec "$SHELL" -l; fi; '
-        'if command -v bash >/dev/null 2>&1; then exec bash -l; fi; '
-        'exec sh'
-    )
+    shell = _resolved_cmd_shell()
+    argv = ['exec', shell, *_cmd_shell_login_flags(shell)]
+    return ' '.join(shlex.quote(part) for part in argv)
+
+
+def _resolved_cmd_shell() -> str:
+    seen: set[str] = set()
+    for candidate in (
+        str(os.environ.get('CCB_CMD_SHELL') or '').strip(),
+        str(os.environ.get('SHELL') or '').strip(),
+        _passwd_login_shell(),
+        _default_shell_impl(is_wsl_fn=_is_wsl_impl, is_windows_fn=_is_windows_impl)[0],
+        'bash',
+        'sh',
+    ):
+        normalized = str(candidate or '').strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        resolved = _resolve_shell_candidate(normalized)
+        if resolved:
+            return resolved
+    return 'sh'
+
+
+def _resolve_shell_candidate(candidate: str) -> str | None:
+    if '/' in candidate:
+        return candidate if Path(candidate).exists() else None
+    return shutil.which(candidate)
+
+
+def _passwd_login_shell() -> str:
+    if pwd is None:
+        return ''
+    try:
+        shell = str(pwd.getpwuid(os.getuid()).pw_shell or '').strip()
+    except Exception:
+        return ''
+    return shell
+
+
+def _cmd_shell_login_flags(shell: str) -> list[str]:
+    shell_name = Path(shell).name.lower()
+    if shell_name in {'bash', 'dash', 'fish', 'ksh', 'sh', 'zsh'}:
+        return ['-l']
+    return []

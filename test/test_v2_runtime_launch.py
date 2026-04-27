@@ -74,6 +74,47 @@ def _assert_caller_env_exports(start_cmd: str, *, actor: str, runtime_dir: Path,
     assert f'CCB_SESSION_ID={shlex.quote(session_id)}' in start_cmd
 
 
+def _write_codex_plugin_source(
+    home: Path,
+    *,
+    plugin_name: str = 'demo-plugin',
+    sha: str = 'plugins-sha-v1',
+    marketplace_name: str = 'openai-curated',
+    skill_body: str = 'plugin skill v1\n',
+) -> None:
+    plugin_root = home / '.tmp' / 'plugins'
+    (plugin_root / '.agents' / 'plugins').mkdir(parents=True, exist_ok=True)
+    (plugin_root / '.agents' / 'skills' / 'plugin-creator').mkdir(parents=True, exist_ok=True)
+    (plugin_root / 'plugins' / plugin_name / '.codex-plugin').mkdir(parents=True, exist_ok=True)
+    (plugin_root / 'plugins' / plugin_name / 'skills' / plugin_name).mkdir(parents=True, exist_ok=True)
+    (home / '.tmp').mkdir(parents=True, exist_ok=True)
+    (home / '.tmp' / 'plugins.sha').write_text(f'{sha}\n', encoding='utf-8')
+    (plugin_root / '.agents' / 'plugins' / 'marketplace.json').write_text(
+        json.dumps(
+            {
+                'name': marketplace_name,
+                'plugins': [
+                    {
+                        'name': plugin_name,
+                        'source': {'source': 'local', 'path': f'./plugins/{plugin_name}'},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding='utf-8',
+    )
+    (plugin_root / 'plugins' / plugin_name / '.codex-plugin' / 'plugin.json').write_text(
+        json.dumps({'name': plugin_name}, ensure_ascii=False, indent=2),
+        encoding='utf-8',
+    )
+    (plugin_root / 'plugins' / plugin_name / 'skills' / plugin_name / 'SKILL.md').write_text(
+        skill_body,
+        encoding='utf-8',
+    )
+
+
 def test_ensure_agent_runtime_configures_claude_managed_home_without_touching_workspace(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-claude-hooks'
     (project_root / '.ccb').mkdir(parents=True)
@@ -1803,6 +1844,13 @@ def test_codex_launcher_build_start_cmd_refreshes_managed_home_projection(monkey
     source_home.mkdir(parents=True, exist_ok=True)
     (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
     (source_home / 'auth.json').write_text('{"OPENAI_API_KEY":"old-key"}\n', encoding='utf-8')
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='plugins-sha-v1',
+        marketplace_name='market-v1',
+        skill_body='plugin skill v1\n',
+    )
     monkeypatch.setenv('CODEX_HOME', str(source_home))
 
     spec = _spec('agent1')
@@ -1813,14 +1861,33 @@ def test_codex_launcher_build_start_cmd_refreshes_managed_home_projection(monkey
     isolated_home = runtime_dir / 'codex-state' / 'home'
     assert (isolated_home / 'config.toml').read_text(encoding='utf-8') == 'model = "gpt-5"\n'
     assert (isolated_home / 'auth.json').read_text(encoding='utf-8') == '{"OPENAI_API_KEY":"old-key"}\n'
+    assert (isolated_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v1\n'
+    assert (
+        isolated_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md'
+    ).read_text(encoding='utf-8') == 'plugin skill v1\n'
 
     (source_home / 'config.toml').write_text('model = "gpt-5.1"\n', encoding='utf-8')
     (source_home / 'auth.json').write_text('{"OPENAI_API_KEY":"new-key"}\n', encoding='utf-8')
+    _write_codex_plugin_source(
+        source_home,
+        plugin_name='weatherpromise',
+        sha='plugins-sha-v2',
+        marketplace_name='market-v2',
+        skill_body='plugin skill v2\n',
+    )
 
     codex_launcher.build_start_cmd(command, spec, runtime_dir, 'sess-refresh-2')
 
     assert (isolated_home / 'config.toml').read_text(encoding='utf-8') == 'model = "gpt-5.1"\n'
     assert (isolated_home / 'auth.json').read_text(encoding='utf-8') == '{"OPENAI_API_KEY":"new-key"}\n'
+    assert (isolated_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v2\n'
+    marketplace_payload = json.loads(
+        (isolated_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json').read_text(encoding='utf-8')
+    )
+    assert marketplace_payload['name'] == 'market-v2'
+    assert (
+        isolated_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md'
+    ).read_text(encoding='utf-8') == 'plugin skill v2\n'
 
 
 def test_codex_launcher_build_start_cmd_reuses_legacy_codex_home_from_persisted_start_cmd(tmp_path: Path) -> None:

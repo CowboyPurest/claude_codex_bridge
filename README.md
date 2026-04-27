@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.0.15-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.0.16-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -92,6 +92,15 @@ This layout means:
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.0.16</b> - Codex Plugin Projection & Cmd Shell Compatibility</summary>
+
+- **Codex Plugin Projection Fixed**: managed Codex homes now project plugin-bundle authority under `.tmp/plugins/` and `.tmp/plugins.sha`, so isolated agents inherit the marketplace catalog and installed plugin assets they actually need instead of starting with plugin-enabled config but missing bundles
+- **Plugin Refresh Semantics Tightened**: startup now refreshes managed plugin projections as one authority unit, removes stale managed plugin residue when the source projection disappears, and keeps a cheap no-recopy fast path when the source plugin freshness marker is unchanged
+- **Cmd Shell / Session Env Hardening**: the `cmd` pane now directly `exec`s the resolved user shell and preserves ordinary user-session transport variables such as `DISPLAY`, `WAYLAND_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XAUTHORITY`, and `SSH_AUTH_SOCK`, improving fish/zsh and GUI-command compatibility
+
+</details>
+
+<details>
 <summary><b>v6.0.15</b> - Codex Route Authority & Foreground Attach Polish</summary>
 
 - **Codex Explicit Route Authority**: managed Codex homes now materialize agent-local `config.toml` and `auth.json` as the sole authority for explicit `key` / `url` routes, so agent-scoped API overrides replace inherited global provider routes instead of drifting back to system config

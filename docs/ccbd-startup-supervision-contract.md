@@ -205,6 +205,9 @@ Managed provider startup mutation rules:
   - examples include `CCB_SESSION_ID`, `CCB_SESSION_FILE`, `CCB_CALLER_*`, `CODEX_*`, `CLAUDE_*`, `GEMINI_*`, `OPENCODE_*`, and equivalent provider runtime markers
   - those variables are runtime-local evidence for the currently running managed agent process, not startup authority for a new or existing project backend
   - provider runtime environment must be injected only into the managed provider process being launched, not leaked into project-scoped control-plane subprocesses
+- that provider-runtime scrub must still preserve ordinary user-session variables needed for the project command pane to behave like the user's shell:
+  - examples include `PATH`, `SHELL`, `DISPLAY`, `WAYLAND_DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`, `XAUTHORITY`, and `SSH_AUTH_SOCK`
+  - those variables are user-session transport or shell-usability state, not managed-provider session authority
 
 Missing-config recovery rules:
 
@@ -339,6 +342,7 @@ Project namespace compatibility:
 - project-owned pane mutation commands, including `respawn-pane` used by `cmd` bootstrap and pane-backed runtime launch/relaunch, must use the same shared tmux ready-retry budget as namespace create/reflow rather than a separate shorter timeout
 - namespace session liveness on the project-owned tmux socket must treat both `can't find session` and `no server running on <project socket>` as "namespace absent" for create/recreate decisions; startup must not fail that path as a generic tmux inspect error
 - startup must not rely on "real shell first, respawn later" behavior for the `cmd` pane, because that leaves stale prompt residue and can surface zsh no-newline `%` markers
+- `cmd` bootstrap must directly `exec` the resolved user shell and must not depend on shell-language-specific inline bootstrap snippets that assume the wrapper shell is POSIX-compatible
 - `cmd`-anchored projects must treat exact project-namespace pane membership as the reuse gate for pane-backed bindings
 - provider-specific live runtime identity proof may further narrow that reuse gate
 - for project-namespace reuse, exact membership means:

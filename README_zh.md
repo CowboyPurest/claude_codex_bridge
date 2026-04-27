@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.0.15-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.0.16-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -98,6 +98,15 @@ cmd; writer:codex, reviewer:claude; qa:gemini(worktree)
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.0.16</b> - Codex 插件投影与 cmd shell 兼容性修复</summary>
+
+- **Codex 插件投影修复**：managed Codex home 现在会把 `.tmp/plugins/` 与 `.tmp/plugins.sha` 作为插件 authority 一起投影，使隔离 agent 不再出现“配置声明启用了插件，但实际 marketplace / 插件资产缺失”的不一致状态
+- **插件刷新语义收紧**：启动现在把 managed 插件投影作为一个完整 authority 单元刷新；当 source 投影消失时会清理旧的 managed 残留，而当 source `plugins.sha` 未变化时又不会重复全量拷贝
+- **cmd Shell / 会话环境加固**：`cmd` pane 现在会直接 `exec` 解析后的用户 shell，并保留 `DISPLAY`、`WAYLAND_DISPLAY`、`DBUS_SESSION_BUS_ADDRESS`、`XAUTHORITY`、`SSH_AUTH_SOCK` 等普通用户会话环境变量，提升 fish/zsh 与 GUI 命令兼容性
+
+</details>
+
+<details>
 <summary><b>v6.0.15</b> - Codex 路由权威与前台 attach 打磨</summary>
 
 - **Codex 显式路由权威**：managed Codex home 现在会把 agent 私有 `config.toml` 与 `auth.json` 物化为显式 `key` / `url` 路由的唯一权威，使 agent 级 API 覆盖真正替代系统级 provider 路由，而不是漂回全局配置
