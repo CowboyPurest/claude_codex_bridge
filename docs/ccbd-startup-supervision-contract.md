@@ -211,9 +211,10 @@ Managed provider startup mutation rules:
 
 Missing-config recovery rules:
 
-- if `.ccb/ccb.config` is missing and the anchor is otherwise empty, bootstrap may write the default config
-- if `.ccb/ccb.config` is missing and `.ccb/agents/*/agent.json` provides a complete recoverable agent-spec set, bootstrap may reconstruct `.ccb/ccb.config` from those specs
-- if `.ccb/ccb.config` is missing and authoritative state exists but agent specs are incomplete or malformed, startup must still fail clearly rather than inventing project truth
+- if `.ccb/ccb.config` is missing, startup must use the built-in default project config from code
+- bootstrap must not auto-create, reconstruct, or rewrite `.ccb/ccb.config`
+- persisted runtime residue, including `.ccb/agents/*/agent.json`, must not be promoted into a reconstructed user config file
+- only a user-authored `.ccb/ccb.config` may replace the built-in default project config
 
 Runtime start policy rules:
 

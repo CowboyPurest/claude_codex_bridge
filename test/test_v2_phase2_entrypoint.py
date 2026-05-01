@@ -156,7 +156,7 @@ def _disable_health_monitor_in_phase2_blackbox_tests(monkeypatch) -> None:
     monkeypatch.setattr(HealthMonitor, 'check_all', lambda self: {})
 
 
-def test_phase2_start_bootstraps_missing_project_and_default_config(monkeypatch, tmp_path: Path) -> None:
+def test_phase2_start_bootstraps_missing_project_without_writing_config(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-bootstrap'
     project_root.mkdir()
     seen: dict[str, object] = {}
@@ -181,8 +181,7 @@ def test_phase2_start_bootstraps_missing_project_and_default_config(monkeypatch,
     assert seen['source'] == 'bootstrapped'
     assert seen['project_root'] == project_root.resolve()
     assert (project_root / '.ccb').is_dir()
-    assert (project_root / '.ccb' / 'ccb.config').is_file()
-    assert (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8') == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert (project_root / '.ccb' / 'ccb.config').exists() is False
     assert 'start_status: ok' in stdout
     assert 'agents: codex, claude' in stdout
 
@@ -201,18 +200,33 @@ def test_ccb_kill_without_anchor_is_noop_and_does_not_bootstrap(tmp_path: Path) 
     assert not (project_root / '.ccb').exists()
 
 
-def test_phase2_missing_config_with_persisted_state_reports_reset_guidance(tmp_path: Path) -> None:
+def test_phase2_missing_config_with_persisted_state_uses_builtin_default(monkeypatch, tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-missing-config-guidance'
     _write(project_root / '.ccb' / 'agents' / 'demo' / 'runtime.json', '{"agent_name":"demo"}\n')
+    seen: dict[str, object] = {}
+
+    def _fake_start(context, command):
+        del command
+        seen['source'] = context.project.source
+        seen['project_root'] = context.project.project_root
+        return SimpleNamespace(
+            project_root=str(context.project.project_root),
+            project_id=context.project.project_id,
+            started=('agent1', 'agent2', 'agent3'),
+            daemon_started=False,
+            socket_path=str(context.paths.ccbd_socket_path),
+        )
+
+    monkeypatch.setattr(phase2_module, 'start_agents', _fake_start)
 
     code, stdout, stderr = _run_phase2_local([], cwd=project_root)
 
-    assert code == 1
-    assert stdout == ''
-    assert 'missing config for existing .ccb anchor with persisted state' in stderr
-    assert 'restore .ccb/ccb.config' in stderr
-    assert 'ccb -n' in stderr
-    assert 'interactive terminal' in stderr
+    assert code == 0, stderr
+    assert seen['source'] == 'anchor'
+    assert seen['project_root'] == project_root.resolve()
+    assert (project_root / '.ccb' / 'ccb.config').exists() is False
+    assert 'start_status: ok' in stdout
+    assert 'agents: agent1, agent2, agent3' in stdout
 
 
 def test_ccb_kill_succeeds_with_persisted_state_without_config(tmp_path: Path) -> None:
@@ -372,7 +386,7 @@ def test_phase2_start_with_new_context_rebuilds_stale_anchor_before_bootstrap(mo
     seen: dict[str, object] = {}
 
     def _fake_start(context, command):
-        seen['config_text'] = (context.project.project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8')
+        seen['config_exists'] = (context.project.project_root / '.ccb' / 'ccb.config').exists()
         seen['ghost_exists'] = (context.project.project_root / '.ccb' / 'agents' / 'ghost').exists()
         seen['restore'] = command.restore
         return SimpleNamespace(
@@ -392,7 +406,7 @@ def test_phase2_start_with_new_context_rebuilds_stale_anchor_before_bootstrap(mo
 
     assert code == 0, stderr.getvalue()
     assert seen['ghost_exists'] is False
-    assert seen['config_text'] == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert seen['config_exists'] is False
     assert seen['restore'] is False
     assert 'start_status: ok' in stdout.getvalue()
 
@@ -408,7 +422,7 @@ def test_phase2_start_with_new_context_rebuilds_after_kill_when_config_missing(m
     seen: dict[str, object] = {}
 
     def _fake_start(context, command):
-        seen['config_text'] = (context.project.project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8')
+        seen['config_exists'] = (context.project.project_root / '.ccb' / 'ccb.config').exists()
         seen['demo_exists'] = (context.project.project_root / '.ccb' / 'agents' / 'demo').exists()
         seen['restore'] = command.restore
         return SimpleNamespace(
@@ -429,7 +443,7 @@ def test_phase2_start_with_new_context_rebuilds_after_kill_when_config_missing(m
     assert code == 0, stderr.getvalue()
     assert seen['restore'] is False
     assert seen['demo_exists'] is False
-    assert seen['config_text'] == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert seen['config_exists'] is False
     assert 'start_status: ok' in stdout.getvalue()
 
 

@@ -524,7 +524,7 @@ Highlights:
 - **Unified Control**: Single entry point controls Claude/OpenCode/Gemini.
 - **Simplified Launch**: Dropped `ccb up`; use `ccb ...` or the default `ccb.config`.
 - **Flexible Mounting**: More flexible pane mounting and session binding.
-- **Default Config**: Auto-create `ccb.config` when missing.
+- **Default Config**: Uses a built-in default when `.ccb/ccb.config` is missing; CCB no longer creates that file automatically.
 - **Project askd Autostart**: project askd and provider runtimes auto-start in the project tmux namespace when needed.
 - **Session Robustness**: PID liveness checks prevent stale sessions.
 
@@ -683,7 +683,7 @@ tmux tip: CCB's tmux status/pane theming is enabled only while CCB is running.
 tmux tip: press `Ctrl+b` then `Space` to cycle tmux layouts. You can press it repeatedly to keep switching layouts.
 
 Layout rule: the last selected agent runs in the current pane. Extras are ordered by the selected target list; the first extra goes to the top-right, then the left column fills top-to-bottom, then the right column fills top-to-bottom.
-Note: `ccb up` is removed; use `ccb ...` with `.ccb/ccb.config`.
+Note: `ccb up` is removed; use `ccb ...` with `.ccb/ccb.config` or the built-in default.
 ```
 
 ### Flags
@@ -695,9 +695,9 @@ Note: `ccb up` is removed; use `ccb ...` with `.ccb/ccb.config`.
 | `-v` | Show version and check for updates | `ccb -v` |
 
 ### ccb.config
-Default lookup order:
-- `.ccb/ccb.config` (project)
-- `~/.ccb/ccb.config` (global)
+Config source:
+- `.ccb/ccb.config` (project, user-authored)
+- built-in default when the project file is absent
 
 Compact format only:
 ```text
@@ -717,7 +717,7 @@ Rules:
 - `(...)` groups part of the layout explicitly.
 - Each agent entry expands to fixed defaults: `target='.'`, `workspace_mode='inplace'`, `restore='auto'`, `permission='manual'`.
 - Use `agent_name:provider(worktree)` when you want that agent isolated in its own git worktree.
-- Missing project config is auto-created as `codex:codex,claude:claude`.
+- Missing project config uses the built-in default without writing `.ccb/ccb.config`.
 - Cmd pane participates in the layout as the first extra pane and does not change which AI runs in the current pane.
 
 ### Update
@@ -994,7 +994,7 @@ ccb reinstall
 ### v5.0.0
 - **Claude Independence**: No need to start Claude first; Codex (or any agent) can be the primary CLI
 - **Unified Control**: Single entry point controls Claude/OpenCode/Gemini equally
-- **Simplified Launch**: Removed `ccb up`; default `ccb.config` is auto-created when missing
+- **Simplified Launch**: Removed `ccb up`; a built-in default is used when `.ccb/ccb.config` is missing
 - **Flexible Mounting**: More flexible pane mounting and session binding
 - **Project askd Autostart**: project askd and provider runtimes auto-start in the project tmux namespace when needed
 - **Session Robustness**: PID liveness checks prevent stale sessions
