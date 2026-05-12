@@ -169,6 +169,14 @@ Rules:
   when `.ccb/agents/<agent>/provider-runtime/codex/session-switch.json`
   exists, including state, reason, commit status, and candidate session
   identity
+- `doctor storage` must surface the effective `shared_cache_root`,
+  `shared_cache_root_usable`, and shared-cache status/reason, so WSL relocation
+  and future provider cache sharing decisions are diagnosable from the same
+  storage view. When the reason is `wsl_drvfs_requires_runtime_relocation`, the
+  root must be reported as unavailable instead of pointing at an unsafe drvfs
+  path. Supported disabled reason codes are `not_implemented`,
+  `not_implemented_runtime_relocated`, and
+  `wsl_drvfs_requires_runtime_relocation`.
 - it must not crash only because one diagnostics artifact is missing or malformed
 - malformed diagnostics files must surface as diagnostics errors, not silent omission
 
@@ -195,6 +203,8 @@ The support bundle must include:
 - backend stdout/stderr logs
 - per-agent runtime authority and recent agent/provider logs
 - non-secret project-local provider-state evidence such as managed Codex homes, session roots, session logs, and config overlays
+- a generated storage classification snapshot at
+  `generated/storage-summary.json`
 - relevant external session files when discoverable from runtime authority
 
 Rules:
@@ -207,6 +217,18 @@ Rules:
   tokens and provider-managed credential files like `auth.json` or
   `oauth_creds.json`; Gemini projected auth artifacts such as `.env` and
   `google_accounts.json` must also be excluded
+- provider-state export must use the storage classification model from
+  [docs/ccb-provider-state-storage-boundary-plan.md](/home/bfly/yunwei/ccb_source/docs/ccb-provider-state-storage-boundary-plan.md)
+  to exclude `SECRET`, `REBUILDABLE_CACHE`, and
+  `STARTUP_AUTHORITY_BUNDLE` payload files from the archive while preserving
+  their path/class/size metadata in `generated/storage-summary.json`
+- if storage classification fails, provider-state export must still apply a
+  conservative path hard-filter for known cache/startup-bundle directories such
+  as Codex `.tmp/plugins/`, Claude `.local/share/claude/versions/`, and
+  Gemini/npm rebuildable cache paths; classification failure must not turn
+  excluded payloads into archive entries
+- provider-state export must not follow symlinks while walking provider-state
+  trees
 - Codex managed-home violations must remain visible as diagnostics evidence; bundle export must not hide them by silently replacing the managed reader source with global `~/.codex/sessions`
 
 ### 3.8 Keeper Child Reaping

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.6-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,10 +74,11 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Ask stays fast under real load**: submit receipts stay bounded even while provider work, mailbox refresh, and background maintenance continue asynchronously.
-- **ccbd lifecycle stabilization**: stop-all, shutdown, restart, and background supervision no longer revive stopped runtimes or regress terminal jobs through stale maintenance work.
-- **Observer commands are explicitly weak**: `pend`, `watch`, `queue`, and `inbox` render as non-authoritative snapshots; use `ccb ask wait <job_id>` for terminal truth.
-- **Linux/macOS/WSL real-platform validation expanded**: release validation now includes real tmux ccbd/ask smoke, communication matrix, soak, and fastpath stress coverage with stub providers.
+- **Tmux startup is hardened**: layout panes now start with a silent placeholder immediately, avoiding fast-exiting shell races during startup.
+- **First-start pane races are fixed**: ccbd start now blocks heartbeat maintenance from mutating tmux panes while the launch layout is still being built.
+- **Project memory has one anchor**: `.ccb/ccb_memory.md` is the project-wide shared memory document for every managed agent.
+- **Claude macOS login inheritance is current**: managed Claude startup checks the `Claude Code-credentials` Keychain service before older service names.
+- **Release checks are stricter**: README, changelog, GitHub Release assets, Actions status, and SHA256SUMS are now audited through maintainer tooling.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -100,6 +101,8 @@ Tmux copy/paste: drag with the left mouse button to copy, and use `Ctrl+Shift+V`
 ## Config Control
 
 `ccb` is controlled by `.ccb/ccb.config`. This file is project-local and user-authored; if it is missing, CCB uses the built-in default without writing a new config file.
+
+`.ccb/ccb_memory.md` is the project-wide shared memory document.
 
 <details>
 <summary><b>Layout</b></summary>
@@ -206,7 +209,7 @@ ccb reinstall           # Clean then reinstall ccb
    Use this path when `ccb` and your agent CLIs run in the same Unix-like shell.
 
 ```bash
-git clone https://github.com/bfly123/claude_codex_bridge.git
+git clone https://github.com/SeemSeam/claude_codex_bridge.git
 cd claude_codex_bridge
 ./install.sh install
 ```
@@ -215,7 +218,7 @@ cd claude_codex_bridge
    Use this path when your agent CLIs run natively on Windows.
 
 ```powershell
-git clone https://github.com/bfly123/claude_codex_bridge.git
+git clone https://github.com/SeemSeam/claude_codex_bridge.git
 cd claude_codex_bridge
 powershell -ExecutionPolicy Bypass -File .\install.ps1 install
 ```
@@ -232,6 +235,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 install
 </details>
 
 Install note: the commands above install from a git checkout today. After that, run `ccb update` to download the latest stable GitHub release asset and complete the managed release upgrade automatically.
+
+## Development Tools
+
+Maintainer-only release and repository tools live under `dev_tools/`. They are versioned in git but excluded from official release artifacts.
 
 ## How to Use
 
@@ -293,6 +300,48 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.1.6</b> - Startup And Claude Auth Hotfix</summary>
+
+- Fixes a first-start race between ccbd start and heartbeat maintenance.
+- `.ccb/ccb_memory.md` is the only shared CCB memory anchor.
+- Adds Claude macOS `Claude Code-credentials` Keychain lookup.
+
+</details>
+
+<details>
+<summary><b>v6.1.5</b> - Tmux Startup Hotfix</summary>
+
+- Fixes startup races that could show `Cannot split: pane ... does not exist` or `respawn pane failed: can't find pane`.
+- Provider panes still use the managed respawn path.
+
+</details>
+
+<details>
+<summary><b>v6.1.4</b> - Shared Project Memory V1</summary>
+
+- `.ccb/ccb_memory.md` is the project-wide shared memory document.
+
+</details>
+
+<details>
+<summary><b>v6.1.2</b> - Provider Storage Boundary Hardening</summary>
+
+- **Storage Classes Made Explicit**: `ccb doctor storage` now separates authority, session state, secrets, workspaces, user content, projected config, rebuildable cache, and startup authority bundles.
+- **Safe Cleanup Added**: `ccb cleanup` refuses to run while `ccbd` or ask jobs are active, prunes only safe rebuildable provider caches, and preserves sessions, auth, and current Claude binaries.
+- **Shared Cache Guardrails Added**: future provider shared-cache paths now resolve under the effective runtime-state root with WSL drvfs safety checks and manifest creation.
+
+</details>
+
+<details>
+<summary><b>v6.1.1</b> - Ask Skill and Memory Injection Cleanup</summary>
+
+- **Ask Skill Kept as the Only Installed Skill**: Claude, Codex, and Droid/Factory installs now publish only the `ask` skill and remove older CCB helper skills such as `ping`, `pend`, `all-plan`, and `file-op`.
+- **Global Memory Injection Removed**: installers no longer append CCB collaboration blocks into global `CLAUDE.md`, installed `AGENTS.md`, or `.clinerules`; existing CCB-marked blocks are cleaned during install.
+- **Legacy Skill Sources Removed**: repository skill templates now keep only the provider-specific `ask` skill assets.
+
+</details>
+
+<details>
 <summary><b>v6.1.0</b> - CCBD Ask Stability and Observer Convergence</summary>
 
 - **Ask Submit Fastpath Stabilized**: `ccb ask` returns bounded receipts without waiting on provider readiness, mailbox history projection, or long maintenance ticks

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.6-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,10 +74,11 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **Ask 在真实负载下保持快速**：provider 执行、mailbox refresh 和后台维护继续异步推进，submit receipt 仍保持有界。
-- **ccbd 生命周期稳定化**：stop-all、shutdown、restart 和后台 supervision 不再通过 stale maintenance 把 stopped runtime 或 terminal job 拉回去。
-- **Observer 命令明确弱化**：`pend`、`watch`、`queue`、`inbox` 都是非权威快照；终态判断请使用 `ccb ask wait <job_id>`。
-- **Linux/macOS/WSL 真实平台验证扩展**：发布验证加入真实 tmux ccbd/ask smoke、通讯矩阵、soak 和 fastpath stress。
+- **Tmux 启动更稳**：布局 pane 创建时立即启动静默 placeholder，避免 fast-exiting shell 导致启动 split race。
+- **首次启动 pane 竞争已修复**：ccbd start 会阻止 heartbeat maintenance 在 layout/launch 过程中改动 tmux pane。
+- **项目记忆只有一个锚点**：`.ccb/ccb_memory.md` 是所有 managed agent 共享的项目全局记忆文档。
+- **Claude macOS 登录继承更新**：managed Claude 启动会优先读取当前 `Claude Code-credentials` Keychain service。
+- **发布检查更严格**：README、changelog、GitHub Release 资产、Actions 状态和 SHA256SUMS 都纳入维护工具审计。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -100,6 +101,8 @@ tmux 复制粘贴：鼠标左键拖拽即可复制，`Ctrl+Shift+V` 粘贴。
 ## 配置控制
 
 `ccb` 的行为由 `.ccb/ccb.config` 控制。它是项目级、用户自己维护的配置文件；如果不存在，CCB 会使用代码内置默认配置，不会自动写入新文件。
+
+`.ccb/ccb_memory.md` 是项目全局记忆文档。
 
 <details>
 <summary><b>布局</b></summary>
@@ -206,7 +209,7 @@ ccb reinstall           # 清理后重新安装
    当 `ccb` 和你的 agent CLI 运行在同一个类 Unix shell 里时，使用这条路径。
 
 ```bash
-git clone https://github.com/bfly123/claude_codex_bridge.git
+git clone https://github.com/SeemSeam/claude_codex_bridge.git
 cd claude_codex_bridge
 ./install.sh install
 ```
@@ -215,7 +218,7 @@ cd claude_codex_bridge
    当你的 agent CLI 原生运行在 Windows 时，使用这条路径。
 
 ```powershell
-git clone https://github.com/bfly123/claude_codex_bridge.git
+git clone https://github.com/SeemSeam/claude_codex_bridge.git
 cd claude_codex_bridge
 powershell -ExecutionPolicy Bypass -File .\install.ps1 install
 ```
@@ -232,6 +235,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 install
 </details>
 
 安装说明：上面的命令目前是从 git checkout 安装。安装后运行 `ccb update`，CCB 会下载最新稳定 GitHub release 包，并自动完成托管 release 升级。
+
+## 开发工具
+
+维护者专用的 release 和仓库管理工具放在 `dev_tools/`。这些工具进入 git 管理，但不会打进官方 release 包。
 
 ## 如何使用
 
@@ -291,6 +298,48 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.1.6</b> - 启动与 Claude 认证 Hotfix</summary>
+
+- 修复首次启动时 ccbd start 与 heartbeat maintenance 的 pane 竞争。
+- `.ccb/ccb_memory.md` 是唯一的 CCB 共享记忆文档。
+- 增加 Claude macOS `Claude Code-credentials` Keychain 查找。
+
+</details>
+
+<details>
+<summary><b>v6.1.5</b> - Tmux 启动 Hotfix</summary>
+
+- 修复启动时可能出现的 `Cannot split: pane ... does not exist` 和 `respawn pane failed: can't find pane`。
+- Provider pane 仍保持原 managed respawn 启动路径。
+
+</details>
+
+<details>
+<summary><b>v6.1.4</b> - 项目共享记忆 V1</summary>
+
+- `.ccb/ccb_memory.md` 是项目全局记忆文档。
+
+</details>
+
+<details>
+<summary><b>v6.1.2</b> - Provider 存储边界加固</summary>
+
+- **存储分类显式化**：`ccb doctor storage` 现在区分 authority、session state、secret、workspace、user content、projected config、rebuildable cache 和 startup authority bundle。
+- **安全清理入口落地**：`ccb cleanup` 会在 `ccbd` 或 ask job 活跃时拒绝执行，只清理安全的可重建 provider cache，并保留 session、auth 和当前 Claude binary。
+- **Shared Cache 护栏补齐**：未来 provider shared-cache 路径统一落在 effective runtime-state root 下，并加入 WSL drvfs 安全检查和 manifest 创建。
+
+</details>
+
+<details>
+<summary><b>v6.1.1</b> - Ask Skill 和记忆注入清理</summary>
+
+- **只安装 Ask Skill**：Claude、Codex 和 Droid/Factory 安装现在只发布 `ask` skill，并清理 `ping`、`pend`、`all-plan`、`file-op` 等旧 CCB helper skill。
+- **移除全局记忆注入**：安装器不再向全局 `CLAUDE.md`、安装目录 `AGENTS.md` 或 `.clinerules` 写入 CCB 协作块；已存在的 CCB 标记块会在安装时清理。
+- **删除旧 Skill 源模板**：仓库内的 skill 模板现在只保留各 provider 的 `ask` skill 资产。
+
+</details>
+
+<details>
 <summary><b>v6.1.0</b> - CCBD Ask 稳定化和 Observer 收敛</summary>
 
 - **Ask Submit Fastpath 稳定化**：`ccb ask` 不再等待 provider readiness、mailbox history projection 或长 maintenance tick，提交回执保持有界
