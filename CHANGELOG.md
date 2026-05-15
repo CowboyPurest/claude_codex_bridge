@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v6.1.18 (2026-05-15)
+
+### Heartbeat Timeout And Useful Tools Release
+
+- **Heartbeat Timeout Now Terminalizes Stalled Jobs**: running-job heartbeat observations stay internal until three no-progress intervals, then CCB emits one terminal `heartbeat_timeout` reply that recommends sending a small communication test before another large task.
+- **Provider Reliability Progress Is Semantic**: cursor movement, polling timestamps, session snapshot rotation, and other reader bookkeeping no longer extend provider completion deadlines; only semantic progress refreshes reliability state.
+- **Reliability State Survives Persistence**: provider runtime persistence preserves `reliability_*` fields so restored jobs keep their timeout deadline instead of resetting it.
+- **Useful Tools Bundle Included**: release artifacts now include the packaged `useful_tools/useful_tools.zip` alongside the versioned optional tool tree.
+
 ## v6.1.17 (2026-05-15)
 
 ### Completion Binding And Codex Session Hotfix

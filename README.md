@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.17-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.18-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,10 +74,10 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Claude completion events bind to the right request**: Stop hooks now use structured transcript anchors for the current outer `CCB_REQ_ID`, ignoring old request ids embedded in forwarded text or tool output.
-- **Codex sessions survive memory edits**: changing `.ccb/ccb_memory.md` refreshes managed memory without forcing Codex to archive or start a fresh conversation.
-- **Mailbox recovery is included**: terminal `task_request` queue heads can now be cleared when their attempt is already terminal, preventing stuck delivery queues.
-- **Regression coverage tightened**: transcript parsing, provider finish hooks, Codex resume behavior, and mailbox stale-head recovery are covered together.
+- **Stalled provider jobs now finish predictably**: heartbeat observations stay internal, and after three no-progress intervals CCB emits one terminal `heartbeat_timeout` reply with a communication-test recommendation.
+- **Completion deadlines ignore polling noise**: cursor movement, rescan timestamps, and session bookkeeping no longer count as provider progress.
+- **Reliability timeout state is preserved**: restored provider jobs keep their `reliability_*` deadline metadata instead of resetting progress after persistence.
+- **Useful Tools are easier to carry around**: release artifacts include `useful_tools/useful_tools.zip` in addition to the optional tool tree.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -306,6 +306,16 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
+<summary><b>v6.1.18</b> - Heartbeat Timeout And Useful Tools Release</summary>
+
+- Keeps running-job heartbeat observations internal until three no-progress intervals, then terminalizes once with `heartbeat_timeout` and a small communication-test recommendation.
+- Treats provider completion progress semantically, so cursor offsets, polling timestamps, and session snapshot bookkeeping no longer extend completion deadlines.
+- Preserves `reliability_*` runtime state through persistence so restored provider jobs do not reset timeout deadlines.
+- Adds `useful_tools/useful_tools.zip` to the versioned optional tools shipped in release artifacts.
+
+</details>
+
+<details>
 <summary><b>v6.1.17</b> - Completion Binding And Codex Session Hotfix</summary>
 
 - Binds Claude Stop-hook completion artifacts to the structured outer `CCB_REQ_ID`, so forwarded text or tool output cannot redirect completion events to an older job.

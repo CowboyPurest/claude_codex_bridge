@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.1.17-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-6.1.18-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,10 +74,10 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **Claude completion 事件绑定正确请求**：Stop hook 现在从结构化 transcript 锚点读取当前外层 `CCB_REQ_ID`，不会被转发文本或工具输出里的旧 req_id 带偏。
-- **Codex 记忆更新不再打断会话**：修改 `.ccb/ccb_memory.md` 会刷新 managed memory，但不会再强制 Codex archive 或新开对话。
-- **Mailbox stuck 恢复已合入**：已终态 attempt 对应的 terminal `task_request` queue head 可以被清理，避免队列卡在 delivering。
-- **回归覆盖更完整**：覆盖 transcript 解析、provider finish hook、Codex resume 和 mailbox stale-head 恢复。
+- **卡住的 provider job 会确定收尾**：heartbeat 观察只保存在内部，连续三轮无进展后只发一次终态 `heartbeat_timeout`，并提示先发小任务测试通讯。
+- **Completion deadline 不再被轮询噪声续命**：cursor 偏移、rescan 时间戳、session bookkeeping 不再算作 provider 进展。
+- **Reliability timeout 状态会被持久化保留**：恢复后的 provider job 会继承 `reliability_*` deadline 元数据，不会重置超时窗口。
+- **Useful Tools 更方便分发**：release artifacts 现在包含 `useful_tools/useful_tools.zip`，同时保留可选工具目录。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -297,6 +297,16 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
+<summary><b>v6.1.18</b> - Heartbeat Timeout And Useful Tools Release</summary>
+
+- running-job heartbeat 观察会保持为内部状态，连续三轮无进展后才以 `heartbeat_timeout` 终态收尾，并建议先发小任务测试通讯。
+- provider completion 进展改为语义判断，cursor offset、polling timestamp、session snapshot bookkeeping 不再延长 completion deadline。
+- `reliability_*` runtime state 会随持久化保留，恢复后的 provider job 不会重置 timeout deadline。
+- 将 `useful_tools/useful_tools.zip` 纳入版本化可选工具，随 release artifacts 一起分发。
+
+</details>
+
+<details>
 <summary><b>v6.1.17</b> - Completion Binding And Codex Session Hotfix</summary>
 
 - Claude Stop hook completion artifact 现在绑定结构化外层 `CCB_REQ_ID`，转发文本或工具输出不会再把 completion 写到旧 job。
