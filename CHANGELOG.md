@@ -2,15 +2,15 @@
 
 ## Unreleased
 
-## v6.3.0 (2026-05-22)
+## v7.0.0 (2026-05-23)
 
 ### Native Sidebar Control Release
 
-- **Native CCB Sidebar Added**: adds a Rust `ccb-agent-sidebar` helper with per-window project view, fixed gray sidebar identity, colored agent status symbols, mouse/keyboard focus switching, and release packaging hooks.
-- **Project Topology Added**: `.ccb/ccb.config` now supports window/sidebar topology while preserving the default three-agent `main` window layout when no project config is present.
-- **Comms Recovery Added**: the sidebar and ccbd now expose comms retry, cancel, and clear flows through ccbd-owned RPCs with project-view recoverability metadata and shared dismissed-row state.
-- **Window-Aware Runtime Metadata Added**: runtime attach, startup results, `ps`, project view, and tmux identity now carry window names/ids so focus and sidebar state remain stable across tmux windows.
-- **Reset History Inheritance Added**: `ccb -n` now clears runtime/mail/pane residue while preserving `.ccb/ccb.config`, project memory, and same-name managed provider-state/session history.
+- **Native CCB Sidebar Added**: adds the Rust `ccb-agent-sidebar` helper with per-window project view, fixed gray sidebar identity, colored provider/runtime activity status, mouse/keyboard focus switching, and release packaging hooks.
+- **Comms Tracking Split From Agent Activity**: top agent rows now reflect real provider pane/runtime activity, while the bottom Comms section remains the CCB ask/job tracking and recovery surface.
+- **Window Topology Config Added**: `ccb_config` docs and skills now cover `version = 2` `[windows]` syntax; explicit windows mount multiple named tmux windows with sidebar panes.
+- **Legacy Config Compatibility Preserved**: compact and hybrid configs without `[windows]` remain single business-window layouts and keep existing `cmd` semantics.
+- **Terminal And Install Compatibility Hardened**: includes Ghostty/tmux `TERM` normalization, tmux environment/mouse fixes, source wrapper handling, release sidebar binary packaging, and Codex legacy root-only session migration into private home sessions.
 
 ## v6.2.9 (2026-05-22)
 

@@ -19,6 +19,7 @@ def test_tmux_backend_run_strips_outer_tmux_environment(monkeypatch: pytest.Monk
     monkeypatch.setenv('TMUX_PANE', '%77')
     monkeypatch.setenv('CCB_TMUX_SOCKET', 'outer')
     monkeypatch.setenv('CCB_TMUX_SOCKET_PATH', '/tmp/outer.sock')
+    monkeypatch.setenv('TERM', 'xterm-ghostty')
 
     def fake_run(args, **kwargs):
         seen['args'] = args
@@ -36,6 +37,7 @@ def test_tmux_backend_run_strips_outer_tmux_environment(monkeypatch: pytest.Monk
     assert 'TMUX_PANE' not in env
     assert 'CCB_TMUX_SOCKET' not in env
     assert 'CCB_TMUX_SOCKET_PATH' not in env
+    assert env['TERM'] == 'xterm-256color'
     assert seen['args'][:4] == ['tmux', '-f', '/dev/null', '-S']
     assert seen['args'][4] == '/tmp/project.sock'
 

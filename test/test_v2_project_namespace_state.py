@@ -451,6 +451,45 @@ bottom_height = 20
     ]['pane-border-format'] != '#{pane_index}'
 
 
+def test_project_namespace_controller_clears_topology_panes_when_reusing_without_topology(tmp_path: Path) -> None:
+    project_root = tmp_path / 'repo-topology-clear'
+    (project_root / '.ccb').mkdir(parents=True)
+    (project_root / '.ccb' / 'ccb.config').write_text(
+        """version = 2
+entry_window = "main"
+
+[windows]
+main = "agent1:codex"
+work = "agent2:codex"
+""",
+        encoding='utf-8',
+    )
+    config = load_project_config(project_root).config
+    layout = PathLayout(project_root)
+    backend = _FakeTmuxBackend()
+    controller = ProjectNamespaceController(
+        layout,
+        'proj-topology-clear',
+        clock=lambda: '2026-04-03T02:25:00Z',
+        backend_factory=lambda socket_path=None: backend,
+    )
+
+    controller.ensure(
+        topology_plan=build_namespace_topology_plan(
+            config,
+            ccbd_socket_path=str(layout.ccbd_socket_path),
+            project_root=str(project_root),
+        )
+    )
+    assert controller._last_materialized_agent_panes
+
+    namespace = controller.ensure()
+
+    assert namespace.created_this_call is False
+    assert controller._last_materialized_agent_panes == {}
+    assert controller._last_topology_active_panes == ()
+
+
 def test_project_namespace_controller_applies_server_policy_when_reusing_session(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo-reuse-policy'
     layout = PathLayout(project_root)

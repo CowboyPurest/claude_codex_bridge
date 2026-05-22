@@ -129,6 +129,38 @@ Contract:
   - expanding simple overlay cases into full-document TOML is not the preferred
     canonical output
 
+### 4.1.1 Explicit Windows Topology
+
+Rich TOML may declare named project windows through `[windows]`:
+
+```toml
+version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree), worker2:claude(worktree)"
+
+[ui.sidebar]
+mode = "every_window"
+width = "15%"
+bottom_height = 20
+```
+
+Contract:
+
+- legacy compact and hybrid configs that do not declare `[windows]` remain
+  single-window configs; they are mounted in the project workspace window and
+  keep their existing `cmd` pane semantics
+- `[windows]` is the authority for layout, default agent traversal, and per-window agent grouping.
+- Each `[windows]` value uses the compact layout grammar, but `cmd` is not supported in windows topology.
+- Every agent leaf in `[windows]` must declare a provider.
+- Each configured agent must appear in exactly one window layout.
+- Windows topology must not be combined with legacy `default_agents`, `layout`, or `cmd_enabled` fields.
+- `entry_window` is optional and defaults to the first declared window.
+- `[ui.sidebar]` is valid only with windows topology. Defaults are `mode = "every_window"`, `width = "15%"`, and `bottom_height = 20`.
+- `[agents.<name>]` tables may provide agent overrides; if they repeat `provider`, it must match the provider declared in `[windows]`.
+
 ### 4.2 Agent API Shortcut
 
 For the common case where an agent only needs its own API key or base URL, rich

@@ -22,7 +22,7 @@ Do not edit generated runtime state, provider-state homes, `.ccb/provider-profil
 
 ## Compact Format
 
-Use compact format for ordinary team layouts:
+Use compact format for ordinary single-window team layouts, especially when the user wants a persistent `cmd` pane. Existing compact configs remain single-window configs and do not need migration to `[windows]`:
 
 ```text
 cmd; main:codex, worker1:codex(worktree); reviewer:claude
@@ -74,7 +74,7 @@ Worktree branch naming can be customized with `branch_template`, but do not set 
 
 ## Hybrid Format
 
-Use hybrid format when the compact layout is enough but one or more agents need extra fields:
+Use hybrid format when the compact single-window layout is enough but one or more agents need extra fields. Hybrid configs without `[windows]` also remain single-window configs:
 
 ```toml
 cmd; main:codex, worker1:codex(worktree); reviewer:claude
@@ -102,9 +102,85 @@ Hybrid overlay rules:
 - overlay must not redefine `provider` or `workspace_mode`;
 - use overlay for fields such as `model`, `key`, `url`, `description`, `labels`, `startup_args`, `provider_profile`, `permission`, `restore`, `queue_policy`, `branch_template`, and `watch_paths`.
 
-## Rich TOML
+## Explicit Windows Topology
 
-Use rich TOML only when compact/hybrid cannot express the request, for example explicit `workspace_mode = "copy"`:
+Use windows topology when the user wants named tmux windows, per-window agent grouping, or native sidebar layout across multiple windows:
+
+```toml
+version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree), worker2:codex(worktree), worker3:claude(worktree)"
+review = "reviewer:claude, discuss:codex"
+
+[ui.sidebar]
+mode = "every_window"
+width = "15%"
+bottom_height = 20
+```
+
+Rules:
+
+- Only `[windows]` enables multi-window topology. Do not rewrite an existing compact/hybrid config into `[windows]` unless the user asks for named windows or per-window grouping.
+- `[windows]` owns layout and the default agent set.
+- Each agent must appear in exactly one window layout.
+- Window layout leaves must declare providers: `agent:provider` or `agent:provider(worktree)`.
+- `cmd` is not supported inside `[windows]` topology. Use compact/hybrid config when a persistent command pane is required.
+- Do not combine windows topology with `default_agents`, `layout`, or `cmd_enabled`.
+- `entry_window` is optional; it defaults to the first window.
+- `[ui.sidebar]` is optional. Defaults are `mode = "every_window"`, `width = "15%"`, and `bottom_height = 20`.
+- Agent overrides still live under `[agents.<name>]`; the provider there must match the provider in `[windows]` if it is repeated.
+
+## Migrating Old Configs To Windows
+
+Old compact and hybrid configs are still valid single-window configs. Migrate them only when the user asks for multi-window behavior, named windows, or per-window sidebar layout.
+
+Migration rules:
+
+- preserve agent names, providers, worktree markers, and ordering unless the user asks to redesign roles;
+- preserve TOML overlay fields by moving them under the same `[agents.<name>]` table after `[windows]`;
+- remove `cmd` from the migrated layout because `[windows]` does not support the persistent command pane;
+- choose concise workflow window names such as `main`, `work`, `review`, `research`, or `ops`;
+- keep each agent in exactly one window;
+- keep compact/hybrid format if the requested change is only a single-window pane rearrangement.
+
+Compact to windows example:
+
+```text
+cmd; main:codex, worker1:codex(worktree), worker2:claude(worktree); reviewer:claude
+```
+
+becomes:
+
+```toml
+version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree), worker2:claude(worktree)"
+review = "reviewer:claude"
+```
+
+Example with an override:
+
+```toml
+version = 2
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree)"
+
+[agents.worker1]
+model = "gpt-5"
+description = "Implements coherent code changes in an isolated git worktree."
+```
+
+## Legacy Rich TOML
+
+Use legacy rich TOML only when compact/hybrid or windows topology cannot express the request, for example explicit `workspace_mode = "copy"`:
 
 ```toml
 version = 2
@@ -177,6 +253,18 @@ Full parallel team:
 
 ```text
 cmd; main:codex, worker1:codex(worktree), worker2:codex(worktree), worker3:claude(worktree); reviewer:claude, discuss:codex
+```
+
+Full parallel team with named windows and native sidebars:
+
+```toml
+version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree), worker2:codex(worktree), worker3:claude(worktree)"
+review = "reviewer:claude, discuss:codex"
 ```
 
 Multi-provider research and implementation:

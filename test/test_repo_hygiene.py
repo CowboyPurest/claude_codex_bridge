@@ -97,7 +97,14 @@ def test_ccb_config_skill_uses_current_config_authority() -> None:
         assert "Never write `.ccb_config/ccb.config`" in skill_text
         assert "Never run `ccb`, `ccb -s`, `ccb kill`" in skill_text
         assert "result.source_kind" in skill_text
+        assert "Explicit windows topology uses `version = 2`, `[windows]`" in skill_text
+        assert "treat it as a migration task" in skill_text
+        assert "Migration to `[windows]` is opt-in" in skill_text
         assert "Do not write `.ccb_config/ccb.config`" in reference_text
+        assert "## Explicit Windows Topology" in reference_text
+        assert "## Migrating Old Configs To Windows" in reference_text
+        assert "Old compact and hybrid configs are still valid single-window configs" in reference_text
+        assert "cmd` is not supported inside `[windows]` topology" in reference_text
 
 
 def test_ccb_config_memory_patterns_describe_callback_routing() -> None:

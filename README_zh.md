@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/模型皆可控-CF1322?style=for-the-badge" alt="模型皆可控">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.3.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.0.0-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 [English](README.md) | **中文**
@@ -74,9 +74,9 @@
 <details>
 <summary><b>最新版本亮点</b></summary>
 
-- **Callback root 能看到最终回复**：委派式 callback root job 等待子链路时显示 `callback_pending`，continuation 完成后 `ask get` 和 `watch` 会显示最终 message-bureau reply。
-- **Observer 命令仅用于诊断**：ask skill 和帮助界面会明确 `ask get`、`pend`、`watch`、`ping` 是调试工具，不是普通 ask 工作流步骤。
-- **长文本改为 artifact 支撑**：超长 ask body、终态回复、notice 和 callback continuation 文本会保存为有预览的 UTF-8 artifact，并进入诊断 bundle。
+- **原生项目侧边栏**：顶部 agent 行展示真实 provider pane/runtime 活动状态，底部 Comms 专注于 CCB ask/job 跟踪和恢复。
+- **Window topology 配置**：`version = 2` `[windows]` 配置可挂载多个命名 tmux window 和 sidebar；旧 compact/hybrid 配置仍是单业务窗口并保留 `cmd` 语义。
+- **终端和安装兼容性增强**：Ghostty/tmux 兼容、tmux 环境/mouse 行为、release sidebar 二进制打包和 source wrapper 处理都已加固。
 
 完整历史见 [新版本记录](#新版本记录)。
 
@@ -329,12 +329,13 @@ ccb reinstall
 历史说明：下面较旧的发布记录里仍可能出现 `askd`、旧 flag 或已移除命令。这些内容仅作为 changelog 历史保留，不代表当前 CLI 入口。
 
 <details open>
-<summary><b>v6.3.0</b> - Native Sidebar Control Release</summary>
+<summary><b>v7.0.0</b> - Native Sidebar Control Release</summary>
 
-- 新增 Rust `ccb-agent-sidebar` 原生侧边栏 helper，支持每个 window 的 project view、固定灰色侧边栏身份、彩色 agent 状态符号，以及鼠标/键盘 focus 切换。
-- 新增 window/sidebar topology 支持，同时保留无配置时默认一个 `main` window，包含 `agent1`、`agent2`、`agent3`。
-- 新增 comms retry、cancel、clear 操作，统一通过 ccbd RPC 执行，并在 `project_view` 中提供可恢复状态元数据。
-- runtime attach、startup results、`ps`、project view、pane identity 现在携带 tmux window name/id，让跨 window focus 更稳定。
+- 新增 Rust `ccb-agent-sidebar` 原生侧边栏 helper，支持每个 window 的 project view、固定灰色侧边栏身份、彩色 provider/runtime 活动状态，以及鼠标/键盘 focus 切换。
+- 拆分顶部 agent activity 和底部 Comms：顶部反映 provider pane/runtime 活动，Comms 继续对应 CCB ask/job 跟踪与恢复。
+- 新增 `version = 2` `[windows]` topology，可挂载多个命名 tmux window 和 sidebar；旧 compact/hybrid 配置仍是单业务窗口并保留 `cmd` 语义。
+- 更新 `ccb_config` docs/skills 的 windows topology 迁移说明，并保持显式多窗口挂载行为。
+- 加固 Ghostty/tmux `TERM` 兼容、tmux 环境/mouse 行为、source wrapper 处理、release sidebar 二进制打包，以及 Codex legacy root-only session 迁移。
 
 </details>
 

@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/Every_Model_Controllable-CF1322?style=for-the-badge" alt="Every Model Controllable">
 </p>
 
-[![Version](https://img.shields.io/badge/version-6.3.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.0.0-orange.svg)]()
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)]()
 
 **English** | [Chinese](README_zh.md)
@@ -74,9 +74,9 @@ Build project-local teams with roles, pane layout, provider state, worktree isol
 <details>
 <summary><b>Latest release highlights</b></summary>
 
-- **Callback roots show the real final reply**: delegated callback root jobs report `callback_pending` while the child chain is running, then `ask get` and `watch` show the final message-bureau reply after continuation.
-- **Observer commands are diagnostics-only**: ask skills and help surfaces now state that `ask get`, `pend`, `watch`, and `ping` are explicit debugging tools, not normal ask workflow steps.
-- **Long CCB text is artifact-backed**: oversized ask bodies, terminal replies, notices, and callback continuation text are stored as bounded UTF-8 artifacts with previews and diagnostics bundle coverage.
+- **Native project sidebar**: top agent rows reflect real provider pane/runtime activity, while the bottom Comms section stays focused on CCB ask/job tracking and recovery.
+- **Window topology config**: `version = 2` `[windows]` configs mount multiple named tmux windows with sidebars, while legacy compact/hybrid configs remain one business window and keep `cmd` semantics.
+- **Terminal and install hardening**: Ghostty/tmux compatibility, tmux environment/mouse behavior, release sidebar binary packaging, and source-wrapper handling are tightened for normal installs.
 
 See [Release Notes](#release-notes) for the full history.
 
@@ -117,7 +117,7 @@ Invoke it from a supported provider skill surface, for example:
 $ccb_config Design a team for a Python library with one coordinator, two worktree implementation agents, and one reviewer.
 ```
 
-The skill helps choose agent names, providers, `inplace` versus `git-worktree`, compact layout syntax, and whether role instructions belong in shared or per-agent memory. It validates which config layer is active and tells you to restart CCB after file changes are complete.
+The skill helps choose agent names, providers, `inplace` versus `git-worktree`, compact layout syntax, optional `[windows]` migration for multi-window teams, and whether role instructions belong in shared or per-agent memory. It validates which config layer is active and tells you to restart CCB after file changes are complete.
 
 </details>
 
@@ -177,6 +177,20 @@ Common compact examples:
 writer:codex, reviewer:claude
 cmd; writer:codex, reviewer:claude; qa:gemini(worktree)
 cmd; fast:codex, deep:codex
+```
+
+Compact and hybrid configs without `[windows]` remain legacy-compatible single-window layouts.
+
+Use explicit windows topology when you want named tmux windows or per-window native sidebars:
+
+```toml
+version = 2
+entry_window = "main"
+
+[windows]
+main = "main:codex"
+work = "worker1:codex(worktree), worker2:codex(worktree), worker3:claude(worktree)"
+review = "reviewer:claude, discuss:codex"
 ```
 
 Same provider, separate API keys:
@@ -338,12 +352,13 @@ Thanks to the [Linux.do community](https://linux.do) for testing, feedback, and 
 Historical note: older release notes below may mention `askd`, legacy flags, or removed commands. Those references are kept only as changelog history and do not redefine the current CLI surface.
 
 <details open>
-<summary><b>v6.3.0</b> - Native Sidebar Control Release</summary>
+<summary><b>v7.0.0</b> - Native Sidebar Control Release</summary>
 
-- Adds the native Rust `ccb-agent-sidebar` helper with per-window project view, fixed gray sidebar identity, colored agent status symbols, and mouse/keyboard focus switching.
-- Adds window/sidebar topology support while keeping the default no-config layout as one `main` window with `agent1`, `agent2`, and `agent3`.
-- Adds comms retry, cancel, and clear actions through ccbd-owned RPCs, with recoverability metadata in `project_view`.
-- Carries tmux window names and ids through runtime attach, startup results, `ps`, project view, and pane identity for stable cross-window focus.
+- Adds the native Rust `ccb-agent-sidebar` helper with per-window project view, fixed gray sidebar identity, colored provider/runtime activity status, and mouse/keyboard focus switching.
+- Splits top agent activity from bottom Comms: top rows reflect provider pane/runtime activity, while Comms stays tied to CCB ask/job tracking and recovery.
+- Adds `version = 2` `[windows]` topology support for multiple named tmux windows with sidebars, while legacy compact/hybrid configs remain one business window and keep `cmd` semantics.
+- Updates `ccb_config` docs/skills for windows topology migration and preserves explicit multi-window mounting behavior.
+- Hardens Ghostty/tmux `TERM` compatibility, tmux environment/mouse behavior, source-wrapper handling, release sidebar binary packaging, and Codex legacy root-only session migration.
 
 </details>
 

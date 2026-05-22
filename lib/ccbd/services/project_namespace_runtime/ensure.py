@@ -61,6 +61,9 @@ def ensure_project_namespace(
                 '_last_topology_active_panes',
                 topology_active_panes(controller, context, topology_plan=topology_plan),
             )
+        else:
+            setattr(controller, '_last_materialized_agent_panes', {})
+            setattr(controller, '_last_topology_active_panes', ())
         return persist_refreshed_namespace(
             controller,
             context,

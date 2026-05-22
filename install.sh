@@ -1565,7 +1565,15 @@ install_bin_links() {
     local name
     name="$(basename "$path")"
     local target_path="$target_root/$path"
-    install_entrypoint_executable "$target_path" "$BIN_DIR/$name"
+    if ! install_entrypoint_executable "$target_path" "$BIN_DIR/$name"; then
+      case "$path" in
+        bin/build-ccb-agent-sidebar|bin/ccb-agent-sidebar)
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+    fi
   done
 
   for legacy in "${LEGACY_SCRIPTS[@]}"; do

@@ -497,10 +497,10 @@ Primary state inputs:
 2. Read namespace state: namespace epoch, project tmux socket/session, managed tmux windows, active window, active pane, and sidebar panes.
 3. Inspect only the project-owned tmux socket/session for configured CCB panes. Do not scan arbitrary tmux sessions.
 4. Load runtime records for configured agents.
-5. Build a job overlay from dispatcher state, current job records, queue depth, and recent terminal job events.
+5. Build the Comms list from dispatcher state, current job records, queue depth, and recent terminal job events.
 6. Build a provider overlay from provider/session activity signals already normalized by `ccbd`.
 7. Build a liveness overlay from pane existence, process liveness, runtime health, and reconcile state.
-8. Resolve each configured agent into one `activity_state`, `activity_source`, `activity_reason`, `last_progress_at`, and optional `current_job_id`.
+8. Resolve each configured agent into one `activity_state`, `activity_source`, `activity_reason`, and optional provider/runtime progress timestamp.
 9. Build `windows` from config order plus known tmux window ids.
 10. Build `comms` from compact CCB job/message records, not raw logs.
 
@@ -526,23 +526,17 @@ For each configured agent, resolve status in this order:
 3. Active recovery/startup:
    - `reconcile_state=starting`, `recovering`, or `reflowing` -> `pending`
    - configured pane is missing and recovery/reflow is active -> `pending`, reason `pane_missing_recovering`
-4. Current CCB job:
-   - `accepted` or `queued` -> `pending`, reason `job_queued`
-   - `running` with recent progress -> `active`, reason `job_running`
-   - `running` without progress for `active_stale_after` -> `pending`, reason `job_running_stale`
-   - `failed`, `incomplete`, or `cancelled` within `failed_visible_for` -> `failed`, reason `job_failed`, `job_incomplete`, or `job_cancelled`
-   - `completed` -> continue to provider/liveness checks; normally this becomes `idle`
-5. Provider/session signal:
+4. Provider/session signal:
    - recent assistant/provider output or user-submitted provider work -> `active`, reason `provider_progress`
    - provider waiting for permission/input/notification -> `pending`, reason `provider_waiting`
    - provider abort/failure event within `failed_visible_for` -> `failed`, reason `provider_failed`
    - provider stop/idle signal -> continue to liveness checks
-6. Pane/process liveness:
+5. Pane/process liveness:
    - healthy configured pane exists and no work is detected -> `idle`, reason `pane_alive`
    - process exists but health is stale or ambiguous -> `pending`, reason `health_unknown`
    - missing configured pane after the checks above should be `failed`, reason `pane_missing_unowned`
 
-This resolver intentionally treats a missing desired pane as a supervision problem, not as normal offline state. In the current CCB model, `ccbd` is expected to continuously supervise configured agents.
+This resolver intentionally treats a missing desired pane as a supervision problem, not as normal offline state. CCB ask/job state is not an agent activity source; queued, running, completed, failed, retry, and callback status belongs in the Comms list. A job id may be used only as a correlation hint for Comms recoverability, never as authority for the top agent row.
 
 ### 8.3 Reason Codes
 
@@ -550,10 +544,10 @@ The sidebar should render only the five states and symbols by default. `activity
 
 Initial reason code set:
 
-- Active: `job_running`, `provider_progress`, `runtime_busy`
-- Pending: `job_queued`, `agent_starting`, `pane_missing_recovering`, `namespace_reflowing`, `provider_waiting`, `job_running_stale`, `health_unknown`
-- Idle: `pane_alive`, `job_completed`, `provider_idle`
-- Failed: `job_failed`, `job_incomplete`, `job_cancelled`, `provider_failed`, `turn_aborted`, `reconcile_failed`, `runtime_fault`, `pane_recovery_failed`, `pane_missing_unowned`
+- Active: `provider_progress`, `provider_working`
+- Pending: `agent_starting`, `pane_missing_recovering`, `namespace_reflowing`, `provider_waiting`, `health_unknown`, `runtime_busy_unverified`
+- Idle: `pane_alive`, `provider_idle`
+- Failed: `provider_failed`, `turn_aborted`, `reconcile_failed`, `runtime_fault`, `pane_recovery_failed`, `pane_missing_unowned`
 - Offline: `agent_stopped`, `agent_unmounted`, `namespace_unmounted`
 
 Reason codes should be stable enough for tests, but UI wording should not depend on displaying them in Phase 1.
@@ -626,14 +620,12 @@ Phase 1 `ProjectView` schema draft:
       "activity_state": "active",
       "activity_symbol": "●",
       "activity_color": "green",
-      "activity_source": "ccb_job",
-      "activity_reason": "job_running",
+      "activity_source": "provider_pane",
+      "activity_reason": "provider_working",
       "last_progress_at": "2026-05-20T12:00:00Z",
       "runtime_state": "busy",
       "runtime_health": "healthy",
       "reconcile_state": "steady",
-      "current_job_id": "job_abc123",
-      "queue_depth": 1,
       "workspace_path": "/home/bfly/yunwei/ccb_source"
     }
   ],
@@ -662,11 +654,10 @@ Schema rules:
 - `activity_state`, `activity_symbol`, `activity_color`, and `activity_reason` are computed by `ccbd`, not by the Rust sidebar.
 - if optional `activity_symbol` or `activity_color` is omitted, the TUI may map from `activity_state` using the fixed Phase 1 status-symbol table; that is presentation mapping, not state recomputation.
 - `activity_state` is one of `active`, `pending`, `idle`, `failed`, or `offline`.
-- `activity_source` is one of `ccb_job`, `provider_signal`, `pane_liveness`, `runtime_health`, `reconcile`, `namespace`, or `none`.
+- `activity_source` is one of `provider_signal`, `provider_pane`, `provider_prompt`, `pane_liveness`, `runtime_health`, `reconcile`, `namespace`, or `none`.
 - `activity_source` identifies the winning resolver layer, while `activity_reason` gives the stable reason code.
-- `last_progress_at` means the last known job/provider/runtime progress time used by the resolver. It may be null when no progress source exists.
-- `current_job_id` is set only when an accepted, queued, running, or recently terminal job is still relevant to the rendered state.
-- `queue_depth` counts queued or accepted CCB jobs for that target agent; provider-manual work outside CCB does not increment it.
+- `last_progress_at` means the last known provider/runtime progress time used by the resolver. It may be null when no progress source exists.
+- Top agent rows must not display CCB ask job ids or queue depth. Those are Comms fields.
 - `reconcile_state` is exposed for diagnostics, but the TUI must not recompute status from it.
 - `comms` is a compact business ask summary list, not a raw job or full event stream.
 - each business ask appears at most once in `comms`; reply-delivery jobs only update the originating ask row's reply fields and must not be counted again as a separate receive row.
@@ -757,8 +748,6 @@ Recommended optional fields for Phase 1:
 - `agents[].runtime_state`
 - `agents[].runtime_health`
 - `agents[].reconcile_state`
-- `agents[].current_job_id`
-- `agents[].queue_depth`
 - `agents[].workspace_path`
 - `comms[].short_id`
 - `comms[].created_at`

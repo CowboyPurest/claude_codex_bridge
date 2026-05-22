@@ -40,7 +40,7 @@ def tmux_layout_for_start(
         return TmuxStartLayout(cmd_pane_id=None, agent_panes={})
     deps.set_tmux_ui_active_fn(True)
     launch_targets = tuple(item.agent_name for item in prepared_agents if item.binding is None)
-    if getattr(config, 'windows_explicit', False) and namespace_agent_panes:
+    if namespace_agent_panes:
         assigned = {
             name: pane
             for name, pane in dict(namespace_agent_panes).items()

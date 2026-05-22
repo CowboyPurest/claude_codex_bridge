@@ -608,11 +608,6 @@ fn agent_row(agent: &AgentView) -> ListItem<'static> {
         .activity_symbol
         .as_deref()
         .unwrap_or_else(|| activity_symbol(state));
-    let job = agent
-        .current_job_id
-        .as_deref()
-        .map(|id| format!(" #{id}"))
-        .unwrap_or_default();
     let active = if agent.active { "*" } else { " " };
     ListItem::new(Line::from(vec![
         Span::raw("  "),
@@ -622,7 +617,7 @@ fn agent_row(agent: &AgentView) -> ListItem<'static> {
         ),
         Span::raw(format!("{active} ")),
         Span::raw(agent.name.clone()),
-        Span::raw(format!(" [{}]{}", agent.provider, job)),
+        Span::raw(format!(" [{}]", agent.provider)),
     ]))
 }
 
@@ -956,7 +951,8 @@ mod tests {
         assert!(!rendered.contains("repo · main"));
         assert!(rendered.contains("> main"));
         assert!(!rendered.contains("@1"));
-        assert!(rendered.contains("◐* agent1 [codex] #job1"));
+        assert!(rendered.contains("◐* agent1 [codex]"));
+        assert!(!rendered.contains("#job1"));
         assert!(rendered.contains("Comms"));
         assert!(rendered.contains("↻  X  ⌫  agent2>agent1 run"));
 
@@ -1047,7 +1043,8 @@ mod tests {
         assert!(rendered.contains("ccbd ✕"));
         assert!(!rendered.contains("repo · main"));
         assert!(rendered.contains("> main"));
-        assert!(rendered.contains("◐* agent1 [codex] #job1"));
+        assert!(rendered.contains("◐* agent1 [codex]"));
+        assert!(!rendered.contains("#job1"));
         assert!(rendered.contains("stale ProjectView"));
         assert!(rendered.contains("↻  X  ⌫  agent2>agent1 run"));
         assert!(!rendered.contains("connect /tmp/ccbd.sock"));
@@ -1428,7 +1425,6 @@ mod tests {
                     activity_state: "pending".into(),
                     activity_symbol: Some("◐".into()),
                     activity_color: Some("yellow".into()),
-                    current_job_id: Some("job1".into()),
                     ..AgentView::default()
                 }],
                 comms: vec![crate::model::CommsItem {
@@ -1793,8 +1789,7 @@ mod tests {
                     "active": true,
                     "activity_state": "pending",
                     "activity_symbol": "◐",
-                    "activity_color": "yellow",
-                    "current_job_id": "job1"
+                    "activity_color": "yellow"
                 }],
                 "comms": []
             },

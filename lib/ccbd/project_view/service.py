@@ -91,8 +91,6 @@ def build_project_view(deps: ProjectViewDependencies, *, generated_at: str) -> d
             window_name=window_by_agent[agent_name],
             order=order,
             namespace_mounted=namespace_mounted,
-            active_job=active_jobs.get(agent_name),
-            queued_jobs=queued_jobs.get(agent_name, ()),
             generated_at=generated_at,
             active=focus.get('active_agent') == agent_name,
             namespace=namespace,
@@ -129,16 +127,12 @@ def _agent_view(
     window_name: str,
     order: int,
     namespace_mounted: bool,
-    active_job,
-    queued_jobs: tuple,
     generated_at: str,
     namespace,
     active: bool = False,
 ) -> dict[str, object]:
     spec = deps.config.agents[agent_name]
     runtime = deps.registry.get(agent_name)
-    job = active_job or (queued_jobs[0] if queued_jobs else None)
-    queue_depth = len(queued_jobs) + (1 if active_job is not None else 0)
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=namespace_mounted,
@@ -148,15 +142,11 @@ def _agent_view(
             desired_state=getattr(runtime, 'desired_state', None) if runtime is not None else None,
             pane_id=getattr(runtime, 'pane_id', None) if runtime is not None else None,
             pane_state=getattr(runtime, 'pane_state', None) if runtime is not None else None,
-            current_job_status=job.status.value if job is not None else None,
-            current_job_id=job.job_id if job is not None else None,
-            current_job_updated_at=job.updated_at if job is not None else None,
             pane_text=_pane_text_hint(
                 deps,
                 namespace=namespace,
                 pane_id=getattr(runtime, 'pane_id', None) if runtime is not None else None,
             ),
-            queue_depth=queue_depth,
         ),
         now=generated_at,
     )
@@ -171,7 +161,6 @@ def _agent_view(
         'runtime_state': _runtime_state(runtime),
         'runtime_health': getattr(runtime, 'health', None) if runtime is not None else None,
         'reconcile_state': getattr(runtime, 'reconcile_state', None) if runtime is not None else None,
-        'queue_depth': queue_depth,
         'workspace_path': getattr(runtime, 'workspace_path', None) if runtime is not None else None,
     }
     return record

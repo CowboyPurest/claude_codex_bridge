@@ -8,6 +8,7 @@ import time
 
 from cli.context import CliContext
 from ccbd.socket_client import CcbdClient, CcbdClientError
+from terminal_runtime.env import tmux_compatible_env
 from terminal_runtime.tmux import tmux_base
 from .daemon_runtime.keeper import record_shutdown_intent
 from .daemon_runtime.policy import (
@@ -323,7 +324,7 @@ def _build_foreground_attach_client(socket_path):
 
 
 def _attach_env() -> dict[str, str]:
-    env = dict(os.environ)
+    env = tmux_compatible_env()
     env.pop('TMUX', None)
     env.pop('TMUX_PANE', None)
     return env

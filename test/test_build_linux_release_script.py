@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import tarfile
 from types import SimpleNamespace
@@ -37,6 +38,7 @@ def test_copy_repo_tree_excludes_runtime_state(tmp_path: Path) -> None:
     (repo_root / ".tmp_pytest" / "run").mkdir(parents=True)
     (repo_root / ".tmp_test_env_arch1" / "env").mkdir(parents=True)
     (repo_root / "dev_tools" / "skills").mkdir(parents=True)
+    (repo_root / "tools" / "ccb-agent-sidebar" / "target" / "debug").mkdir(parents=True)
     (repo_root / "inherit_skills" / "codex_skills" / "ask").mkdir(parents=True)
     (repo_root / "inherit_skills" / "claude_skills" / "ask").mkdir(parents=True)
     (repo_root / "useful_tools" / "codex_skills" / "plan-tree").mkdir(parents=True)
@@ -52,6 +54,10 @@ def test_copy_repo_tree_excludes_runtime_state(tmp_path: Path) -> None:
     (repo_root / ".tmp_pytest" / "run" / "state.json").write_text("{}", encoding="utf-8")
     (repo_root / ".tmp_test_env_arch1" / "env" / "state.json").write_text("{}", encoding="utf-8")
     (repo_root / "dev_tools" / "skills" / "README.md").write_text("dev only\n", encoding="utf-8")
+    (repo_root / "tools" / "ccb-agent-sidebar" / "target" / "debug" / "ccb-agent-sidebar").write_text(
+        "build output\n",
+        encoding="utf-8",
+    )
     (repo_root / "inherit_skills" / "codex_skills" / "ask" / "SKILL.md").write_text("ask\n", encoding="utf-8")
     (repo_root / "inherit_skills" / "claude_skills" / "ask" / "SKILL.md").write_text("ask\n", encoding="utf-8")
     (repo_root / "useful_tools" / "codex_skills" / "plan-tree" / "SKILL.md").write_text("skill\n", encoding="utf-8")
@@ -72,6 +78,7 @@ def test_copy_repo_tree_excludes_runtime_state(tmp_path: Path) -> None:
     assert not (destination / ".tmp_pytest").exists()
     assert not (destination / ".tmp_test_env_arch1").exists()
     assert not (destination / "dev_tools").exists()
+    assert not (destination / "tools" / "ccb-agent-sidebar" / "target").exists()
 
 
 def test_copy_repo_tree_excludes_generated_output_subtree_inside_repo(tmp_path: Path) -> None:
@@ -276,6 +283,58 @@ def test_export_release_tree_allows_dirty_preview(monkeypatch, tmp_path: Path) -
     )
 
     assert calls == [("copy", repo_root, destination, generated_paths)]
+
+
+def test_build_sidebar_helper_for_release_copies_real_binary(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    artifact_root = tmp_path / "artifact"
+    crate_dir = artifact_root / "tools" / "ccb-agent-sidebar"
+    output_bin = artifact_root / "bin" / "ccb-agent-sidebar"
+    crate_dir.mkdir(parents=True)
+    output_bin.parent.mkdir(parents=True)
+    (crate_dir / "Cargo.toml").write_text('[package]\nname = "ccb-agent-sidebar"\n', encoding="utf-8")
+    output_bin.write_text("#!/usr/bin/env bash\n# CCB_AGENT_SIDEBAR_WRAPPER\n", encoding="utf-8")
+    output_bin.chmod(0o755)
+
+    def _fake_run(cmd, **kwargs):
+        assert cmd[:3] == ["cargo", "build", "--release"]
+        built = crate_dir / "target" / "release" / "ccb-agent-sidebar"
+        built.parent.mkdir(parents=True)
+        built.write_text("#!/usr/bin/env bash\necho release-sidebar\n", encoding="utf-8")
+        built.chmod(0o755)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", _fake_run)
+
+    module.build_sidebar_helper_for_release(artifact_root)
+
+    assert output_bin.read_text(encoding="utf-8") == "#!/usr/bin/env bash\necho release-sidebar\n"
+    assert os.access(output_bin, os.X_OK)
+    assert not (crate_dir / "target").exists()
+
+
+def test_build_sidebar_helper_for_release_fails_when_cargo_fails(monkeypatch, tmp_path: Path) -> None:
+    module = _load_module()
+    artifact_root = tmp_path / "artifact"
+    crate_dir = artifact_root / "tools" / "ccb-agent-sidebar"
+    crate_dir.mkdir(parents=True)
+    (crate_dir / "Cargo.toml").write_text('[package]\nname = "ccb-agent-sidebar"\n', encoding="utf-8")
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr="cargo failed"),
+    )
+
+    try:
+        module.build_sidebar_helper_for_release(artifact_root)
+    except RuntimeError as exc:
+        text = str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+    assert "failed to build ccb-agent-sidebar" in text
+    assert "cargo failed" in text
 
 
 def test_resolve_version_prefers_git_ref_snapshot(monkeypatch, tmp_path: Path) -> None:

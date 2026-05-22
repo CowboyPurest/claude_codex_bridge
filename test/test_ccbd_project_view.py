@@ -301,9 +301,9 @@ def test_project_view_returns_minimal_windows_agents_and_comms(tmp_path: Path) -
     assert [window['name'] for window in view['windows']] == ['main', 'ops']
     assert view['windows'][0]['agents'] == ['agent1', 'agent2']
     assert [agent['name'] for agent in view['agents']] == ['agent1', 'agent2', 'agent3']
-    assert view['agents'][0]['activity_state'] == 'active'
-    assert view['agents'][0]['current_job_id'] == 'job_running_1234'
-    assert view['agents'][2]['activity_state'] == 'pending'
+    assert view['agents'][0]['activity_state'] == 'idle'
+    assert 'current_job_id' not in view['agents'][0]
+    assert view['agents'][2]['activity_state'] == 'idle'
     assert [item['id'] for item in view['comms']] == ['job_running_1234', 'job_queued_5678']
     assert view['comms'][0]['sender'] == 'agent2'
     assert view['comms'][0]['target'] == 'agent1'
@@ -463,7 +463,7 @@ def test_project_view_terminal_comms_do_not_mark_agent_failed(tmp_path: Path) ->
 
     assert agent3['activity_state'] == 'idle'
     assert agent3['activity_reason'] == 'pane_alive'
-    assert agent3['current_job_id'] is None
+    assert 'current_job_id' not in agent3
     assert view['comms'][0]['id'] == cancelled.job_id
     assert view['comms'][0]['status'] == 'cancelled'
 
@@ -854,7 +854,8 @@ def test_project_view_sequence_changes_when_content_changes(tmp_path: Path) -> N
     assert first['cache']['sequence'] == 1
     assert second['cache']['sequence'] == 2
     assert first['view']['agents'][0]['activity_state'] == 'idle'
-    assert second['view']['agents'][0]['activity_state'] == 'active'
+    assert second['view']['agents'][0]['activity_state'] == 'idle'
+    assert [item['id'] for item in second['view']['comms']] == ['job_running_1234']
 
 
 class _FocusBackend:
@@ -1155,9 +1156,9 @@ def test_project_view_marks_running_job_idle_after_provider_prompt_reappears(tmp
     agent3 = next(agent for agent in view['agents'] if agent['name'] == 'agent3')
     comm = view['comms'][0]
 
-    assert agent3['activity_state'] == 'pending'
-    assert agent3['activity_source'] == 'provider_prompt'
-    assert agent3['activity_reason'] == 'provider_prompt_idle'
+    assert agent3['activity_state'] == 'idle'
+    assert agent3['activity_source'] == 'pane_liveness'
+    assert agent3['activity_reason'] == 'pane_alive'
     assert comm['id'] == job.job_id
     assert comm['business_status'] == 'blocked'
     assert comm['status_label'] == 'stuck'
@@ -1217,9 +1218,9 @@ def test_project_view_does_not_mark_fresh_running_prompt_idle_as_recoverable(tmp
     agent3 = next(agent for agent in view['agents'] if agent['name'] == 'agent3')
     comm = view['comms'][0]
 
-    assert agent3['activity_state'] == 'active'
-    assert agent3['activity_source'] == 'ccb_job'
-    assert agent3['activity_reason'] == 'job_running'
+    assert agent3['activity_state'] == 'idle'
+    assert agent3['activity_source'] == 'pane_liveness'
+    assert agent3['activity_reason'] == 'pane_alive'
     assert comm['id'] == job.job_id
     assert comm['business_status'] == 'replying'
     assert comm['status_label'] == 'work'
@@ -1294,30 +1295,37 @@ def test_project_view_marks_stale_running_job_recoverable_when_provider_prompt_i
 
 def test_activity_resolver_core_states() -> None:
     assert resolve_agent_activity(AgentActivityFacts(namespace_mounted=False), now=NOW).state == 'offline'
-    assert resolve_agent_activity(
-        AgentActivityFacts(namespace_mounted=True, current_job_status='queued', current_job_id='job1'),
-        now=NOW,
-    ).state == 'pending'
-    assert resolve_agent_activity(
+    queued = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
-            current_job_status='running',
-            current_job_updated_at='2026-05-20T11:59:30Z',
-            current_job_id='job1',
-        ),
-        now=NOW,
-    ).state == 'active'
-    stale = resolve_agent_activity(
-        AgentActivityFacts(
-            namespace_mounted=True,
-            current_job_status='running',
-            current_job_updated_at='2026-05-20T11:50:00Z',
-            current_job_id='job1',
+            runtime_state='idle',
+            pane_id='%1',
+            pane_state='alive',
         ),
         now=NOW,
     )
-    assert stale.state == 'pending'
-    assert stale.reason == 'job_running_stale'
+    assert queued.state == 'idle'
+    running = resolve_agent_activity(
+        AgentActivityFacts(
+            namespace_mounted=True,
+            runtime_state='idle',
+            pane_id='%1',
+            pane_state='alive',
+        ),
+        now=NOW,
+    )
+    assert running.state == 'idle'
+    stale = resolve_agent_activity(
+        AgentActivityFacts(
+            namespace_mounted=True,
+            runtime_state='idle',
+            pane_id='%1',
+            pane_state='alive',
+        ),
+        now=NOW,
+    )
+    assert stale.state == 'idle'
+    assert stale.reason == 'pane_alive'
     assert resolve_agent_activity(
         AgentActivityFacts(namespace_mounted=True, pane_id='%1', pane_state='missing', reconcile_state='recovering'),
         now=NOW,
@@ -1377,14 +1385,11 @@ def test_activity_resolver_ignores_stale_provider_prompt_after_codex_idle_prompt
     assert activity.reason == 'pane_alive'
 
 
-def test_activity_resolver_provider_prompt_idle_after_running_request() -> None:
+def test_activity_resolver_treats_idle_prompt_after_request_as_agent_idle() -> None:
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at='2026-05-20T11:59:20Z',
-            current_job_id='job_prompt_idle_2',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_prompt_idle_2\n\ncancelled\n\n❯ \n',
@@ -1392,19 +1397,16 @@ def test_activity_resolver_provider_prompt_idle_after_running_request() -> None:
         now=NOW,
     )
 
-    assert activity.state == 'pending'
-    assert activity.source == 'provider_prompt'
-    assert activity.reason == 'provider_prompt_idle'
+    assert activity.state == 'idle'
+    assert activity.source == 'pane_liveness'
+    assert activity.reason == 'pane_alive'
 
 
-def test_activity_resolver_provider_prompt_idle_requires_age() -> None:
+def test_activity_resolver_ignores_fresh_job_when_provider_prompt_is_idle() -> None:
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at=NOW,
-            current_job_id='job_prompt_idle_new',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_prompt_idle_new\n\n❯ \n',
@@ -1412,18 +1414,15 @@ def test_activity_resolver_provider_prompt_idle_requires_age() -> None:
         now=NOW,
     )
 
-    assert activity.state == 'active'
-    assert activity.reason == 'job_running'
+    assert activity.state == 'idle'
+    assert activity.reason == 'pane_alive'
 
 
-def test_activity_resolver_provider_prompt_idle_requires_prompt_after_request() -> None:
+def test_activity_resolver_does_not_use_job_state_without_provider_working_signal() -> None:
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at=NOW,
-            current_job_id='job_still_waiting',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_still_waiting\n\nworking on task\n',
@@ -1431,18 +1430,15 @@ def test_activity_resolver_provider_prompt_idle_requires_prompt_after_request() 
         now=NOW,
     )
 
-    assert activity.state == 'active'
-    assert activity.reason == 'job_running'
+    assert activity.state == 'idle'
+    assert activity.reason == 'pane_alive'
 
 
-def test_activity_resolver_provider_prompt_input_stuck() -> None:
+def test_activity_resolver_keeps_input_stuck_detection_in_comms_not_agent_status() -> None:
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at='2026-05-20T11:59:20Z',
-            current_job_id='job_input_stuck',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_input_stuck\n\n  查询北京天气\n',
@@ -1450,19 +1446,16 @@ def test_activity_resolver_provider_prompt_input_stuck() -> None:
         now=NOW,
     )
 
-    assert activity.state == 'pending'
-    assert activity.source == 'provider_prompt'
-    assert activity.reason == 'provider_prompt_input_stuck'
+    assert activity.state == 'idle'
+    assert activity.source == 'pane_liveness'
+    assert activity.reason == 'pane_alive'
 
 
-def test_activity_resolver_provider_prompt_input_stuck_requires_age() -> None:
+def test_activity_resolver_ignores_fresh_input_stuck_job_for_agent_status() -> None:
     activity = resolve_agent_activity(
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at=NOW,
-            current_job_id='job_input_new',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_input_new\n\n  查询北京天气\n',
@@ -1470,8 +1463,8 @@ def test_activity_resolver_provider_prompt_input_stuck_requires_age() -> None:
         now=NOW,
     )
 
-    assert activity.state == 'active'
-    assert activity.reason == 'job_running'
+    assert activity.state == 'idle'
+    assert activity.reason == 'pane_alive'
 
 
 def test_activity_resolver_provider_prompt_does_not_hide_running_tool() -> None:
@@ -1479,9 +1472,6 @@ def test_activity_resolver_provider_prompt_does_not_hide_running_tool() -> None:
         AgentActivityFacts(
             namespace_mounted=True,
             runtime_state='busy',
-            current_job_status='running',
-            current_job_updated_at=NOW,
-            current_job_id='job_running_tool',
             pane_id='%1',
             pane_state='alive',
             pane_text='❯ CCB_REQ_ID: job_running_tool\n\nBash(sleep 60)\n⎿ Running… (10s)\n\n❯ \n',

@@ -119,6 +119,18 @@ def test_start_foreground_attaches_to_namespace_tmux_session(tmp_path: Path, mon
     ) == 1
 
 
+def test_start_foreground_normalizes_ghostty_term_for_tmux(monkeypatch) -> None:
+    monkeypatch.setenv('TERM', 'xterm-ghostty')
+    monkeypatch.setenv('TMUX', '/tmp/tmux-1000/default,123,0')
+    monkeypatch.setenv('TMUX_PANE', '%77')
+
+    env = start_foreground_service._attach_env()
+
+    assert env['TERM'] == 'xterm-256color'
+    assert 'TMUX' not in env
+    assert 'TMUX_PANE' not in env
+
+
 def test_start_foreground_waits_for_workspace_window_visibility_before_attach(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo-attach-delayed-window'
     (project_root / '.ccb').mkdir(parents=True, exist_ok=True)

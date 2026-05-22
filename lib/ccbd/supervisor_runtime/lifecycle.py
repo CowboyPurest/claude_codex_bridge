@@ -25,13 +25,18 @@ def start_supervisor(
     try:
         topology_plan = None
         namespace_layout_signature = None
-        if supervisor._project_namespace is not None and interactive_tmux_layout:
+        if (
+            supervisor._project_namespace is not None
+            and _uses_explicit_windows_topology(supervisor._config, interactive_tmux_layout=interactive_tmux_layout)
+        ):
             topology_plan = build_namespace_topology_plan(
                 supervisor._config,
                 ccbd_socket_path=str(supervisor._paths.ccbd_socket_path),
                 project_root=str(supervisor._project_root),
             )
             namespace_layout_signature = topology_plan.signature
+        elif supervisor._project_namespace is not None and interactive_tmux_layout:
+            namespace_layout_signature = str(getattr(supervisor._config, 'topology_signature', '') or '') or None
         namespace = (
             ensure_project_namespace(
                 supervisor._project_namespace,
@@ -121,6 +126,10 @@ def _sync_lifecycle_namespace_epoch(supervisor, *, namespace) -> None:
     lifecycle_store.save(
         lifecycle.with_updates(namespace_epoch=int(epoch))
     )
+
+
+def _uses_explicit_windows_topology(config, *, interactive_tmux_layout: bool) -> bool:
+    return bool(interactive_tmux_layout and getattr(config, 'windows_explicit', False))
 
 
 def stop_all_supervisor(

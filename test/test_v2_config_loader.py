@@ -42,6 +42,11 @@ def test_load_valid_project_config(tmp_path: Path) -> None:
     assert spec.permission_default is PermissionMode.MANUAL
     assert spec.queue_policy is QueuePolicy.SERIAL_PER_AGENT
     assert result.config.layout_spec == 'cmd; agent1:codex'
+    assert result.config.windows_explicit is False
+    assert result.config.entry_window == 'main'
+    assert [window.name for window in result.config.windows] == ['main']
+    assert result.config.windows[0].layout_spec == 'agent1:codex'
+    assert result.config.windows[0].agent_names == ('agent1',)
 
 
 def test_load_project_config_rejects_provider_only_list(tmp_path: Path) -> None:
@@ -68,6 +73,9 @@ def test_load_project_config_supports_named_simple_agent_map(tmp_path: Path) -> 
     assert result.config.agents['agent3'].provider == 'claude'
     assert result.config.cmd_enabled is True
     assert result.config.layout_spec == 'cmd, agent1:codex; agent2:codex, agent3:claude'
+    assert result.config.windows_explicit is False
+    assert [window.name for window in result.config.windows] == ['main']
+    assert result.config.windows[0].agent_names == ('agent1', 'agent2', 'agent3')
 
 
 def test_load_project_config_normalizes_mixed_case_compact_agent_names(tmp_path: Path) -> None:

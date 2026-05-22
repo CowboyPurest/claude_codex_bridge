@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ccbd.system import parse_utc_timestamp
-
 ACTIVITY_ACTIVE = 'active'
 ACTIVITY_PENDING = 'pending'
 ACTIVITY_IDLE = 'idle'
@@ -20,8 +18,6 @@ ACTIVITY_PRESENTATION = {
 
 _RECOVERY_STATES = frozenset({'starting', 'recovering', 'reflowing', 'mounting'})
 _FAULT_HEALTH = frozenset({'faulted', 'failed', 'error', 'crashed', 'orphaned'})
-_PENDING_JOB_STATUSES = frozenset({'accepted', 'queued'})
-_FAILED_JOB_STATUSES = frozenset({'failed', 'incomplete', 'cancelled'})
 _PROVIDER_PROMPT_MARKERS = (
     'do you trust the contents of this directory?',
     'press enter to continue',
@@ -46,11 +42,7 @@ class AgentActivityFacts:
     desired_state: str | None = None
     pane_id: str | None = None
     pane_state: str | None = None
-    current_job_status: str | None = None
-    current_job_id: str | None = None
-    current_job_updated_at: str | None = None
     pane_text: str | None = None
-    queue_depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -59,7 +51,6 @@ class AgentActivity:
     source: str
     reason: str
     last_progress_at: str | None = None
-    current_job_id: str | None = None
 
     @property
     def symbol(self) -> str:
@@ -77,7 +68,6 @@ class AgentActivity:
             'activity_source': self.source,
             'activity_reason': self.reason,
             'last_progress_at': self.last_progress_at,
-            'current_job_id': self.current_job_id,
         }
 
 
@@ -85,15 +75,12 @@ def resolve_agent_activity(
     facts: AgentActivityFacts,
     *,
     now: str,
-    active_stale_after_s: float = 120.0,
-    failed_visible_for_s: float = 300.0,
 ) -> AgentActivity:
+    del now
     runtime_state = _clean(facts.runtime_state)
     runtime_health = _clean(facts.runtime_health)
     reconcile_state = _clean(facts.reconcile_state)
     desired_state = _clean(facts.desired_state)
-    pane_state = _clean(facts.pane_state)
-    job_status = _clean(facts.current_job_status)
 
     if not facts.namespace_mounted:
         return AgentActivity(ACTIVITY_OFFLINE, 'namespace', 'namespace_unmounted')
@@ -111,89 +98,21 @@ def resolve_agent_activity(
         reason = 'pane_missing_recovering' if _pane_missing(facts) else 'reconcile_active'
         return AgentActivity(ACTIVITY_PENDING, 'reconcile', reason)
 
-    if job_status in _PENDING_JOB_STATUSES:
-        return AgentActivity(
-            ACTIVITY_PENDING,
-            'ccb_job',
-            'job_queued',
-            last_progress_at=facts.current_job_updated_at,
-            current_job_id=facts.current_job_id,
-        )
-    if job_status == 'running':
-        age = _age_seconds(now, facts.current_job_updated_at)
-        if _provider_working(facts.pane_text):
-            return AgentActivity(
-                ACTIVITY_ACTIVE,
-                'provider_pane',
-                'provider_working',
-                last_progress_at=facts.current_job_updated_at,
-                current_job_id=facts.current_job_id,
-            )
-        if (
-            age is not None
-            and age > PROVIDER_INPUT_STUCK_AFTER_S
-            and provider_prompt_idle_after_request(facts.pane_text, facts.current_job_id)
-        ):
-            return AgentActivity(
-                ACTIVITY_PENDING,
-                'provider_prompt',
-                'provider_prompt_idle',
-                last_progress_at=facts.current_job_updated_at,
-                current_job_id=facts.current_job_id,
-            )
-        if (
-            age is not None
-            and age > PROVIDER_INPUT_STUCK_AFTER_S
-            and provider_prompt_input_stuck(facts.pane_text, facts.current_job_id)
-        ):
-            return AgentActivity(
-                ACTIVITY_PENDING,
-                'provider_prompt',
-                'provider_prompt_input_stuck',
-                last_progress_at=facts.current_job_updated_at,
-                current_job_id=facts.current_job_id,
-            )
-        stale = age
-        if stale is not None and stale > active_stale_after_s:
-            return AgentActivity(
-                ACTIVITY_PENDING,
-                'ccb_job',
-                'job_running_stale',
-                last_progress_at=facts.current_job_updated_at,
-                current_job_id=facts.current_job_id,
-            )
-        return AgentActivity(
-            ACTIVITY_ACTIVE,
-            'ccb_job',
-            'job_running',
-            last_progress_at=facts.current_job_updated_at,
-            current_job_id=facts.current_job_id,
-        )
-    if job_status in _FAILED_JOB_STATUSES:
-        age = _age_seconds(now, facts.current_job_updated_at)
-        if age is None or age <= failed_visible_for_s:
-            return AgentActivity(
-                ACTIVITY_FAILED,
-                'ccb_job',
-                f'job_{job_status}',
-                last_progress_at=facts.current_job_updated_at,
-                current_job_id=facts.current_job_id,
-            )
-
-    if runtime_state == 'idle' and _provider_tail_idle_prompt(facts.pane_text):
-        return AgentActivity(ACTIVITY_IDLE, 'pane_liveness', 'pane_alive')
-
-    if _provider_waiting_for_user(facts.pane_text):
-        return AgentActivity(ACTIVITY_PENDING, 'provider_prompt', 'provider_waiting_for_user')
     if _provider_working(facts.pane_text):
         return AgentActivity(ACTIVITY_ACTIVE, 'provider_pane', 'provider_working')
+    if _provider_tail_idle_prompt(facts.pane_text):
+        return AgentActivity(ACTIVITY_IDLE, 'pane_liveness', 'pane_alive')
+    if _provider_waiting_for_user(facts.pane_text):
+        return AgentActivity(ACTIVITY_PENDING, 'provider_prompt', 'provider_waiting_for_user')
 
-    if runtime_state == 'busy':
-        return AgentActivity(ACTIVITY_ACTIVE, 'pane_liveness', 'runtime_busy')
     if runtime_state == 'degraded':
         return AgentActivity(ACTIVITY_PENDING, 'runtime_health', 'health_unknown')
+    if _pane_alive(facts):
+        return AgentActivity(ACTIVITY_IDLE, 'pane_liveness', 'pane_alive')
     if runtime_state == 'idle':
         return AgentActivity(ACTIVITY_IDLE, 'pane_liveness', 'pane_alive')
+    if runtime_state == 'busy':
+        return AgentActivity(ACTIVITY_PENDING, 'runtime_health', 'runtime_busy_unverified')
 
     return AgentActivity(ACTIVITY_PENDING, 'runtime_health', 'runtime_unknown')
 
@@ -206,6 +125,12 @@ def _pane_missing(facts: AgentActivityFacts) -> bool:
     if _clean(facts.pane_state) in {'missing', 'dead'}:
         return True
     return bool(str(facts.pane_id or '').strip()) and _clean(facts.pane_state) == 'missing'
+
+
+def _pane_alive(facts: AgentActivityFacts) -> bool:
+    if not str(facts.pane_id or '').strip():
+        return False
+    return _clean(facts.pane_state) not in {'missing', 'dead'}
 
 
 def _provider_waiting_for_user(pane_text: str | None) -> bool:
@@ -221,8 +146,10 @@ def _provider_working(pane_text: str | None) -> bool:
     normalized = _provider_recent_text(pane_text)
     if not normalized:
         return False
-    if any(marker in normalized for marker in _PROVIDER_ACTIVE_MARKERS):
+    if 'running...' in normalized or 'running…' in normalized:
         return True
+    if 'esc to interrupt' in normalized:
+        return not _provider_tail_idle_prompt(pane_text)
     return any(word in normalized for word in _PROVIDER_ACTIVE_WORDS) and 'interrupt' in normalized
 
 
@@ -332,15 +259,6 @@ def _provider_output_started(value: str) -> bool:
         return False
     markers = ('\n●', '\n✻', '\n✶', '\n·', 'Bash(', 'Web Search(', 'Read(', 'Edit(', 'Write(')
     return any(marker in text for marker in markers)
-
-
-def _age_seconds(now: str, timestamp: str | None) -> float | None:
-    if not timestamp:
-        return None
-    try:
-        return (parse_utc_timestamp(now) - parse_utc_timestamp(timestamp)).total_seconds()
-    except Exception:
-        return None
 
 
 __all__ = [

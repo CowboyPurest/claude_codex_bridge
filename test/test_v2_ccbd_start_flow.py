@@ -54,6 +54,40 @@ def test_project_socket_active_panes_preserves_namespace_root_without_cmd() -> N
     assert cmd_pane_id is None
 
 
+def test_tmux_layout_for_start_uses_namespace_agent_panes_when_provided() -> None:
+    from ccbd.start_flow_runtime.service_tmux import tmux_layout_for_start
+
+    calls: dict[str, object] = {}
+    deps = SimpleNamespace(
+        set_tmux_ui_active_fn=lambda active: calls.setdefault('ui_active', active),
+        build_project_layout_plan_fn=lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError('namespace topology should provide panes')
+        ),
+        prepare_tmux_start_layout_fn=None,
+    )
+    prepared_agents = (
+        SimpleNamespace(agent_name='agent1', binding=None),
+        SimpleNamespace(agent_name='agent2', binding=None),
+        SimpleNamespace(agent_name='agent3', binding=None),
+    )
+
+    layout = tmux_layout_for_start(
+        deps,
+        SimpleNamespace(),
+        config=SimpleNamespace(windows_explicit=False),
+        prepared_agents=prepared_agents,
+        interactive_tmux_layout=True,
+        tmux_backend=SimpleNamespace(),
+        root_pane_id='%0',
+        namespace_agent_panes={'agent1': '%1', 'agent2': '%2', 'agent3': '%3'},
+        actions_taken=[],
+    )
+
+    assert calls['ui_active'] is True
+    assert layout.cmd_pane_id is None
+    assert layout.agent_panes == {'agent1': '%1', 'agent2': '%2', 'agent3': '%3'}
+
+
 def test_ccbd_start_flow_writes_runtime_authority_via_rpc(tmp_path: Path, monkeypatch) -> None:
     project_root = tmp_path / 'repo-ccbd-start'
     (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
