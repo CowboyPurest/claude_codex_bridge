@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v7.2.4 (2026-06-04)
+## v7.2.5 (2026-06-04)
 
 ### Agent Roles Catalog Release
 
@@ -11,6 +11,13 @@
 - **Runtime Projection Preserved**: role memory, adapter memory, provider skills, and CCB adapter tool hooks project into managed Codex/Claude homes for `agentroles.archi`.
 - **Update Flow Improved**: `install.sh install` and `ccb update` handle catalog role refreshes, report newly available roles, and keep non-interactive follow-up commands explicit.
 - **Compatibility Alias Kept**: legacy `ccb.archi` inputs resolve to `agentroles.archi` while project config and locks use the canonical catalog role id.
+- **Source Runtime Guard Fixed**: source checkout commands that pass `--project` now validate the target project against allowed test roots, restoring CCBD communication smoke checks launched from the source checkout.
+
+## v7.2.4 (2026-06-04)
+
+### Superseded Agent Roles Catalog Release
+
+- Superseded by v7.2.5 after the release gate found that source checkout `--project` commands were rejected from the source cwd during CCBD real platform smoke checks.
 
 ## v7.2.3 (2026-06-03)
 

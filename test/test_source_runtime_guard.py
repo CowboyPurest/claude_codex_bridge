@@ -59,6 +59,23 @@ def test_source_ccb_allows_stateful_commands_under_configured_test_root(tmp_path
     assert "config_status: valid" in proc.stdout
 
 
+def test_source_ccb_allows_project_arg_under_configured_test_root_from_source_cwd(tmp_path: Path) -> None:
+    allowed = tmp_path / "test-project"
+    project = allowed / "repo"
+    project.mkdir(parents=True)
+    (project / ".ccb").mkdir()
+    (project / ".ccb" / "ccb.config").write_text("cmd; agent1:codex\n", encoding="utf-8")
+
+    proc = _run_source_ccb(
+        ["--project", str(project), "config", "validate"],
+        cwd=REPO_ROOT,
+        extra_env={"CCB_SOURCE_ALLOWED_ROOTS": str(allowed)},
+    )
+
+    assert proc.returncode == 0
+    assert "config_status: valid" in proc.stdout
+
+
 def test_source_ccb_explicit_override_allows_one_off_run(tmp_path: Path) -> None:
     project = tmp_path / "repo"
     project.mkdir()

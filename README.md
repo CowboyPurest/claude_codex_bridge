@@ -10,7 +10,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey.svg)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-7.2.4-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-7.2.5-orange.svg)]()
 [![Release](https://img.shields.io/badge/install-release--first-orange.svg)]()
 
 **English** | [中文](README_zh.md)
@@ -519,12 +519,20 @@ v7 highlights:
 - Hardened tmux, Ghostty, release helper, Codex trust, and provider session restore paths.
 
 <details open>
-<summary><b>v7.2.4</b> - Agent Roles Catalog Release</summary>
+<summary><b>v7.2.5</b> - Agent Roles Catalog Release</summary>
 
 - Moves the production architecture role out of the CCB source tree and consumes `agentroles.archi` from `agent-roles-spec`.
 - Adds catalog-backed role list/install/update/sync/add/doctor behavior with installed-role metadata, project locks, digest pinning, and explicit re-add updates.
 - Projects role memory, CCB adapter memory, provider skills, and Architec adapter hooks into managed provider homes.
 - Keeps `ccb.archi` as a compatibility alias while writing canonical `agentroles.archi` bindings and locks.
+- Fixes the source runtime guard so `ccb --project <allowed-test-dir> ...` smoke commands launched from the source checkout pass the release gate.
+
+</details>
+
+<details>
+<summary><b>v7.2.4</b> - Superseded Agent Roles Catalog Release</summary>
+
+- Superseded by v7.2.5 after the release gate found that source checkout `--project` commands were rejected from the source cwd during CCBD real platform smoke checks.
 
 </details>
 

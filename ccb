@@ -21,7 +21,7 @@ backend_env = get_backend_env()
 if backend_env and not os.environ.get("CCB_BACKEND_ENV"):
     os.environ["CCB_BACKEND_ENV"] = backend_env
 
-VERSION = "7.2.4"
+VERSION = "7.2.5"
 GIT_COMMIT = "release"
 GIT_DATE = "2026-06-04"
 
@@ -65,6 +65,26 @@ def _path_is_under(path: Path, root: Path) -> bool:
     return resolved_path == resolved_root or resolved_root in resolved_path.parents
 
 
+def _project_arg_paths(argv: list[str], cwd: Path) -> list[Path]:
+    paths: list[Path] = []
+    index = 0
+    while index < len(argv):
+        item = argv[index]
+        value: str | None = None
+        if item == "--project" and index + 1 < len(argv):
+            value = argv[index + 1]
+            index += 1
+        elif item.startswith("--project="):
+            value = item.split("=", 1)[1]
+        if value:
+            project_path = Path(value).expanduser()
+            if not project_path.is_absolute():
+                project_path = cwd / project_path
+            paths.append(project_path)
+        index += 1
+    return paths
+
+
 def _source_runtime_allowed(root: Path, cwd: Path, argv: list[str]) -> tuple[bool, str]:
     if not _is_source_checkout(root):
         return True, ""
@@ -77,6 +97,10 @@ def _source_runtime_allowed(root: Path, cwd: Path, argv: list[str]) -> tuple[boo
 
     configured = os.environ.get("CCB_SOURCE_ALLOWED_ROOTS", "")
     allowed_roots = _split_roots(configured) if configured.strip() else _default_source_allowed_roots(root)
+    for project_path in _project_arg_paths(argv, cwd):
+        for allowed_root in allowed_roots:
+            if _path_is_under(project_path, allowed_root):
+                return True, ""
     for allowed_root in allowed_roots:
         if _path_is_under(cwd, allowed_root):
             return True, ""
