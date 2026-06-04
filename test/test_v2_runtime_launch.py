@@ -41,7 +41,7 @@ from terminal_runtime.tmux_identity import pane_visual
 from workspace.planner import WorkspacePlanner
 
 
-def _spec(name: str, provider: str = 'codex') -> AgentSpec:
+def _spec(name: str, provider: str = 'codex', *, startup_args: tuple[str, ...] = ()) -> AgentSpec:
     return AgentSpec(
         name=name,
         provider=provider,
@@ -52,6 +52,7 @@ def _spec(name: str, provider: str = 'codex') -> AgentSpec:
         restore_default=RestoreMode.AUTO,
         permission_default=PermissionMode.MANUAL,
         queue_policy=QueuePolicy.SERIAL_PER_AGENT,
+        startup_args=startup_args,
     )
 
 
@@ -1950,7 +1951,7 @@ def test_claude_launcher_build_start_cmd_respects_agent_restore_fresh(monkeypatc
     assert '--continue' not in start_cmd
 
 
-def test_claude_launcher_build_start_cmd_includes_agent_model_shortcut(tmp_path: Path) -> None:
+def test_claude_launcher_build_start_cmd_includes_agent_model_shortcut(monkeypatch, tmp_path: Path) -> None:
     runtime_dir = tmp_path / 'runtime-claude-model'
     runtime_dir.mkdir(parents=True, exist_ok=True)
     spec = AgentSpec(
@@ -1967,6 +1968,7 @@ def test_claude_launcher_build_start_cmd_includes_agent_model_shortcut(tmp_path:
     )
     command = ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False)
 
+    monkeypatch.setattr(claude_launcher, 'is_root_user', lambda: False)
     start_cmd = claude_launcher.build_start_cmd(
         command,
         spec,
@@ -1975,7 +1977,62 @@ def test_claude_launcher_build_start_cmd_includes_agent_model_shortcut(tmp_path:
         prepared_state=_claude_prepared_state(runtime_dir),
     )
 
+    assert 'IS_SANDBOX=1' not in start_cmd
+    assert '--dangerously-skip-permissions' not in start_cmd
     assert start_cmd.endswith('claude --setting-sources user,project,local --model opus')
+
+
+def test_claude_launcher_build_start_cmd_adds_root_sandbox_compat(monkeypatch, tmp_path: Path) -> None:
+    runtime_dir = tmp_path / 'runtime-claude-root'
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    spec = _spec('reviewer', provider='claude')
+    command = ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False)
+
+    monkeypatch.setattr(claude_launcher, 'is_root_user', lambda: True)
+    monkeypatch.setattr(
+        claude_launcher,
+        '_resolve_claude_restore_target',
+        lambda **kwargs: ProviderRestoreTarget(run_cwd=runtime_dir, has_history=False),
+    )
+
+    start_cmd = claude_launcher.build_start_cmd(
+        command,
+        spec,
+        runtime_dir,
+        'claude-sess-root',
+        prepared_state=_claude_prepared_state(runtime_dir),
+    )
+
+    assert 'IS_SANDBOX=1' in start_cmd
+    assert start_cmd.endswith('claude --dangerously-skip-permissions --setting-sources user,project,local')
+
+
+def test_claude_launcher_build_start_cmd_does_not_duplicate_root_skip_flag(monkeypatch, tmp_path: Path) -> None:
+    runtime_dir = tmp_path / 'runtime-claude-root-dedup'
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    spec = _spec('reviewer', provider='claude', startup_args=('--dangerously-skip-permissions', '--debug'))
+    command = ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False)
+
+    monkeypatch.setattr(claude_launcher, 'is_root_user', lambda: True)
+    monkeypatch.setattr(
+        claude_launcher,
+        '_resolve_claude_restore_target',
+        lambda **kwargs: ProviderRestoreTarget(run_cwd=runtime_dir, has_history=False),
+    )
+
+    start_cmd = claude_launcher.build_start_cmd(
+        command,
+        spec,
+        runtime_dir,
+        'claude-sess-root-dedup',
+        prepared_state=_claude_prepared_state(runtime_dir),
+    )
+
+    assert 'IS_SANDBOX=1' in start_cmd
+    assert start_cmd.count('--dangerously-skip-permissions') == 1
+    assert start_cmd.endswith(
+        'claude --setting-sources user,project,local --dangerously-skip-permissions --debug'
+    )
 
 
 def test_claude_launcher_build_start_cmd_requires_launch_context(tmp_path: Path) -> None:
