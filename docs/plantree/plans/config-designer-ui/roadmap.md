@@ -18,6 +18,8 @@ Date: 2026-06-06
   Advanced, Provider Startup Advanced, Runtime Advanced, and Output groups.
 - Documented that the built-in no-config default includes the managed Neovim
   tool window.
+- Added language-following rules so `ccb-config` presents menus, questions, and
+  explanations in the user's language while keeping CCB syntax literal.
 
 ## In Progress
 

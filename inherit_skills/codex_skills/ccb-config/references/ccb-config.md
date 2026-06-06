@@ -26,6 +26,21 @@ Do not edit memory files for ordinary config design, migration, provider changes
 
 Do not edit generated runtime state, provider-state homes, `.ccb/provider-profiles/`, `.ccb/ccbd/`, legacy `.ccb_config/`, or generated runtime memory.
 
+## Language Rules
+
+Use the user's language for menu text, explanations, questions, summaries,
+warnings, and next-step instructions. Keep CCB syntax literal:
+
+- TOML keys and table names stay as documented.
+- Provider names, role ids, command names, env vars, and layout tokens stay
+  literal.
+- Agent names and window names should remain ASCII-safe identifiers unless the
+  current grammar explicitly allows otherwise.
+- Localized human text can be placed in `description`, `labels`, sidebar `tips`,
+  or normal prose when the user wants localized display text.
+- Preserve the existing language of user-authored `description`, `labels`,
+  sidebar `tips`, and comments unless the user asks to translate them.
+
 ## Config Option Menu
 
 Use this grouping when the user asks what can be configured or wants an interactive, numbered setup pass:
@@ -72,6 +87,9 @@ Output
 ```
 
 Keep Basic visible for ordinary users. Treat Agent Advanced, Workspace Advanced, Provider Startup Advanced, and Runtime Advanced as opt-in controls unless the user asks for them.
+
+When presenting this menu, translate the headings and descriptions into the
+user's language while keeping the option numbers and literal field names stable.
 
 ## Compact Format
 

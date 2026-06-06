@@ -23,6 +23,14 @@ This skill is not a workflow-memory designer. Do not edit `.ccb/ccb_memory.md`, 
 
 Never run `ccb`, `ccb -s`, `ccb kill`, `ccb reload`, or restart commands as part of this skill workflow. Finish file writes and validation first, then tell the user what to run.
 
+## Language Behavior
+
+Match the user's language for all user-facing prose. If the user writes in Chinese, present the menu, clarification question, proposal summary, warnings, and next steps in Chinese. If the user writes in English, use English. For mixed-language requests, use the dominant language of the latest user request and preserve quoted terms as written.
+
+Do not translate CCB syntax or stable identifiers: TOML keys, table names, provider names, role ids, command names, env vars, `workspace_group`, `workspace_path`, `provider_command_template`, `startup_args`, and layout tokens stay literal. Agent names and window names should stay ASCII-safe unless the current CCB grammar explicitly allows otherwise; localized human wording belongs in `description`, `labels`, or explanatory prose.
+
+When editing existing config, preserve the language of existing user-authored `description`, `labels`, sidebar `tips`, and comments unless the user asks to translate or rewrite them.
+
 ## Configuration Menu
 
 Present this menu as a readable list when useful. Users can choose by section name, number, or plain language.
@@ -69,6 +77,8 @@ Output
 ```
 
 Keep the first response compact. For normal users, focus on Basic. Treat Agent Advanced, Workspace Advanced, Provider Startup Advanced, and Runtime Advanced as explicit opt-in sections.
+
+Translate the displayed menu labels and short explanations into the user's language when presenting the menu. Keep the option numbers and literal config field names unchanged.
 
 ## Advanced Grouping Rules
 
