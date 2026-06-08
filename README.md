@@ -417,6 +417,23 @@ Normal `ask` is submit-and-return: after handing work to the target agent, the c
 | Current agent sends independent work whose successful result does not need to return | `ask --silence worker1` |
 | Queue or status diagnostics | `pend`, `watch`, `ping`, and similar commands are diagnostics only |
 
+When an agent submits a child task, choose flags from the result intent first,
+then add dependency and artifact preservation only when needed:
+
+| Need | Recommended flags |
+| :--- | :--- |
+| Publish or execute work; successful result is not useful | `--silence` |
+| Get a short outcome: status, findings, risks, blockers, or next steps | `--compact` |
+| Get full consultation, analysis, report, generated doc, or structured findings | `--artifact-reply` |
+| Continue an active parent task only after the child result arrives | add `--callback` |
+| Preserve exact pasted logs, diff, JSON/YAML, table, or copied text | add `--artifact-request` |
+| Preserve exact input and full output | `--artifact-io` |
+| Short question or short handoff where inline text is enough | plain `ask` |
+
+`--callback` and `--silence` control task relationship. Artifact flags control
+content preservation. The automatic long-message spill is only a fallback, so
+use artifact flags proactively when exact input or full output matters.
+
 <details>
 <summary><b>Why callback matters</b></summary>
 
