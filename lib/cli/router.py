@@ -63,6 +63,7 @@ def print_start_help(*, file=None) -> None:
               ccb -s               Safe start. Disable CLI auto-permission override.
               ccb -n               Rebuild runtime state while preserving config and managed agent history.
               ccb clear [agent...]  Send provider-native /clear to managed agent panes.
+              ccb restart <agent> Restart one idle configured agent pane through ccbd.
               ccb reload            Apply a safe additive config reload, or reject with diagnostics.
               ccb reload --dry-run  Validate and plan config reload without mutation.
               ccb kill             Stop the current project's background runtime.
@@ -98,6 +99,9 @@ def print_start_help(*, file=None) -> None:
 
             Roles:
               ccb roles list
+              ccb roles install agentroles.ccb_self
+              ccb roles update agentroles.ccb_self
+              ccb roles add agentroles.ccb_self:codex
               ccb roles install agentroles.archi
               ccb roles update agentroles.archi
               ccb roles sync [path]
@@ -259,6 +263,17 @@ _COMMAND_HELP = {
           - It does not delete .ccb state, workspaces, auth, sessions, or logs.
           - Use `ccb kill` or the sidebar restart control when you need process restart.
     """,
+    "restart": """
+        usage: ccb restart <agent_name>
+
+        Guarded single-agent runtime restart:
+          ccb restart agent1   Restart one configured mounted agent pane through ccbd.
+
+        Safety:
+          - Target authority comes from the current mounted daemon graph.
+          - Refuses when the agent is busy, queued, delivering a reply, or waiting on callback continuation.
+          - Does not support `restart all`, window-level restart, or raw tmux mutation.
+    """,
     "doctor": """
         usage: ccb doctor [ps|logs <agent>|storage] [--output [PATH]]
 
@@ -359,6 +374,10 @@ _COMMAND_HELP = {
 
         Role Pack management:
           ccb roles list
+          ccb roles show agentroles.ccb_self
+          ccb roles install agentroles.ccb_self
+          ccb roles update agentroles.ccb_self
+          ccb roles add agentroles.ccb_self:codex
           ccb roles show agentroles.archi
           ccb roles install agentroles.archi
           ccb roles update agentroles.archi
